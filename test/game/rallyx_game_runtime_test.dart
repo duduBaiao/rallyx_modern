@@ -1,4 +1,5 @@
 import 'package:flame/game.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rallyx_modern/game/rallyx_game.dart';
@@ -110,5 +111,65 @@ void main() {
     await tester.pump(const Duration(milliseconds: 600));
     expect(game.currentStage, 2);
     expect(game.currentEnemySpawnCount, 1);
+  });
+
+  testWidgets('player does not rotate while stopped', (
+    WidgetTester tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final game = RallyXGame();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: GameWidget<RallyXGame>(game: game)),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 700));
+
+    final player = game.playerCar;
+    expect(player, isNotNull);
+    final initialAngle = player!.body.angle;
+
+    game.keyboardInputSource.handleKeyEvent(
+      const KeyDownEvent(
+        physicalKey: PhysicalKeyboardKey.arrowLeft,
+        logicalKey: LogicalKeyboardKey.arrowLeft,
+        timeStamp: Duration.zero,
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 350));
+
+    final stoppedAngleDelta = (player.body.angle - initialAngle).abs();
+    expect(stoppedAngleDelta, lessThan(0.02));
+
+    game.keyboardInputSource.clear();
+  });
+
+  testWidgets('player speed is capped at tuned lower top speed', (
+    WidgetTester tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final game = RallyXGame();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: GameWidget<RallyXGame>(game: game)),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 700));
+
+    game.keyboardInputSource.handleKeyEvent(
+      const KeyDownEvent(
+        physicalKey: PhysicalKeyboardKey.arrowUp,
+        logicalKey: LogicalKeyboardKey.arrowUp,
+        timeStamp: Duration.zero,
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 2200));
+
+    expect(game.playerCar, isNotNull);
+    expect(game.playerCar!.speed, lessThanOrEqualTo(4.3));
+
+    game.keyboardInputSource.clear();
   });
 }

@@ -17,7 +17,7 @@ class PlayerCarComponent extends BodyComponent<RallyXGame> {
            position: spawnPosition,
            angle: -math.pi / 2,
            linearDamping: 1.2,
-           angularDamping: 5.0,
+           angularDamping: 3.8,
          ),
          fixtureDefs: [
            FixtureDef(
@@ -34,15 +34,16 @@ class PlayerCarComponent extends BodyComponent<RallyXGame> {
   static const double _halfLength = _carLength / 2;
   static const double _halfWidth = _carWidth / 2;
 
-  static const double _engineForce = 100;
-  static const double _brakeForce = 140;
-  static const double _reverseForce = 60;
+  static const double _engineForce = 52;
+  static const double _brakeForce = 110;
+  static const double _reverseForce = 38;
   static const double _coastDrag = 8;
   static const double _reverseThreshold = 0.35;
-  static const double _maxForwardSpeed = 16;
-  static const double _maxReverseSpeed = 6;
-  static const double _maxSteerRate = 2.8;
-  static const double _steerResponse = 8.0;
+  static const double _maxForwardSpeed = 4.2;
+  static const double _maxReverseSpeed = 1.8;
+  static const double _minSteerSpeed = 0.55;
+  static const double _maxSteerRate = 5.12;
+  static const double _steerResponse = 20.0;
   static const double _lateralGrip = 0.85;
 
   final InputSource inputSource;
@@ -128,8 +129,14 @@ class PlayerCarComponent extends BodyComponent<RallyXGame> {
   }
 
   void _applySteering(VehicleCommand command) {
+    final speed = body.linearVelocity.length;
+    if (speed < _minSteerSpeed) {
+      body.angularVelocity = 0;
+      return;
+    }
+
     final speedRatio = (body.linearVelocity.length / _maxForwardSpeed).clamp(
-      0.2,
+      0.45,
       1.0,
     );
     final targetAngularVelocity = command.steering * _maxSteerRate * speedRatio;
@@ -145,7 +152,7 @@ class PlayerCarComponent extends BodyComponent<RallyXGame> {
     final lateralImpulse = right * (-lateralSpeed * body.mass * _lateralGrip);
     body.applyLinearImpulse(lateralImpulse);
 
-    body.angularVelocity *= 0.92;
+    body.angularVelocity *= 0.96;
   }
 
   void _clampVelocity(Vector2 forward, Vector2 right) {
