@@ -108,6 +108,7 @@ Introduce now for future extensibility:
 ### 7.2 Procedural Rules
 
 - Generate connected tile-aligned corridor maze in 32x32 grid.
+- Generate a new run seed each restart; keep that seed across stage progression.
 - Build static colliders for walls and rocks.
 - Place player spawn, enemy spawns, and 10 flags.
 - Guarantee flag reachability from player spawn.
@@ -184,61 +185,67 @@ Status legend:
 
 ### M2 - Procedural Level
 
-- [ ] Add `LevelProvider` abstraction and `ProceduralLevelProvider`.
-- [ ] Generate connected 32x32 maze with tile-aligned corridors.
-- [ ] Build static wall and rock colliders from generated map.
-- [ ] Add spawn placement for player, enemies, and flags.
-- [ ] Place exactly 10 flags including one special flag.
-- [ ] Validate reachability from player spawn to all flags.
+- [x] Add `LevelProvider` abstraction and `ProceduralLevelProvider`.
+- [x] Generate connected 32x32 maze with tile-aligned corridors.
+- [x] Build static wall and rock colliders from generated map.
+- [x] Add spawn placement for player, enemies, and flags.
+- [x] Place exactly 10 flags including one special flag.
+- [x] Validate reachability from player spawn to all flags.
 - [ ] Exit criteria: every run creates a valid playable level.
+  - Validation note (2026-03-07): generator validity tests pass and macOS build succeeds; in-game repeated-run playtest still pending.
 
 ### M3 - Core Gameplay Systems
 
-- [ ] Implement `FuelSystem` with passive fuel drain.
-- [ ] Implement smoke action and fuel consumption.
-- [ ] Implement smoke cloud and enemy stun timing.
-- [ ] Implement `ScoringSystem` (survival time + flag bonus).
-- [ ] Implement stage clear condition when all flags are collected.
-- [ ] Refill fuel to full at stage transition.
+- [x] Implement `FuelSystem` with passive fuel drain.
+- [x] Implement smoke action and fuel consumption.
+- [x] Implement smoke cloud and enemy stun timing.
+- [x] Implement `ScoringSystem` (survival time + flag bonus).
+- [x] Implement stage clear condition when all flags are collected.
+- [x] Refill fuel to full at stage transition.
 - [ ] Exit criteria: complete Rally-X-like survival loop works without enemies.
+  - Validation note (2026-03-07): fuel/smoke/flag/stage loop is implemented and builds/tests pass; gameplay tuning playtest still pending.
 
 ### M4 - Enemies (Tesla Robo-Taxis)
 
-- [ ] Implement `EnemyCarComponent`.
-- [ ] Implement simple physics-like chase controller.
-- [ ] Add corridor-graph waypoint guidance.
-- [ ] Apply smoke stun effect to enemies.
-- [ ] Implement one-hit collision game-over.
-- [ ] Add per-stage difficulty scaling (count/speed/tuning).
+- [x] Implement `EnemyCarComponent`.
+- [x] Implement simple physics-like chase controller.
+- [x] Add corridor-graph waypoint guidance.
+- [x] Apply smoke stun effect to enemies.
+- [x] Implement one-hit collision game-over.
+- [x] Add per-stage difficulty scaling (count/speed/tuning).
 - [ ] Exit criteria: enemies chase reliably and create survival pressure.
+  - Validation note (2026-03-07): chase/smoke/collision systems implemented with stage scaling; gameplay balance playtest still pending.
 
 ### M5 - HUD, Minimap, Camera Polish
 
-- [ ] Implement HUD for fuel, survival time, and stage.
-- [ ] Implement full-map minimap panel.
-- [ ] Add minimap markers for player, enemies, and flags.
-- [ ] Tune smooth-follow camera and clamp to map bounds.
-- [ ] Add clear game-over overlay and restart action.
+- [x] Implement HUD for fuel, survival time, and stage.
+- [x] Implement full-map minimap panel.
+- [x] Add minimap markers for player, enemies, and flags.
+- [x] Tune smooth-follow camera and clamp to map bounds.
+- [x] Add clear game-over overlay and restart action.
 - [ ] Exit criteria: gameplay information is always visible and readable.
+  - Validation note (2026-03-07): HUD/minimap/game-over overlays implemented and build/tests pass; readability tuning playtest pending.
 
 ### M6 - Persistence + Run Loop Finalization
 
-- [ ] Implement `HighScoreRepository` with SharedPreferences.
-- [ ] Persist and load top 10 scores.
-- [ ] Sort descending and trim leaderboard to 10.
-- [ ] Connect score submission on game-over.
-- [ ] Ensure restart resets runtime state cleanly.
-- [ ] Exit criteria: scores persist across app restarts.
+- [x] Implement `HighScoreRepository` with SharedPreferences.
+- [x] Persist and load top 10 scores.
+- [x] Sort descending and trim leaderboard to 10.
+- [x] Connect score submission on game-over.
+- [x] Ensure restart resets runtime state cleanly.
+- [x] Exit criteria: scores persist across app restarts.
+  - Validation note (2026-03-07): persistence tests cover cross-instance reload and top-10 storage behavior.
 
 ### M7 - Tests, Debug, Tuning
 
-- [ ] Add debug metrics: FPS, seed, speed, fuel, stage, enemy count.
-- [ ] Add unit tests for input mapping.
-- [ ] Add unit tests for generation reachability.
-- [ ] Add unit tests for scoring and leaderboard logic.
-- [ ] Perform balancing pass for fuel drain, enemy speed, and smoke duration.
-- [ ] Run regression pass on stage transitions and game-over paths.
+- [x] Add debug metrics: FPS, seed, speed, fuel, stage, enemy count.
+- [x] Add unit tests for input mapping.
+- [x] Add unit tests for generation reachability.
+- [x] Add unit tests for scoring and leaderboard logic.
+- [x] Perform balancing pass for fuel drain, enemy speed, and smoke duration.
+- [x] Run regression pass on stage transitions and game-over paths.
 - [ ] Exit criteria: tests pass and MVP gameplay feels stable.
+  - Validation note (2026-03-07): full test suite passes including runtime regression (restart, stage advance, enemy scaling/override) and generation stress tests; final manual gameplay feel pass still pending.
 
 ## 12. Definition of Done (MVP)
 

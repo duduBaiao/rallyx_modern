@@ -7,6 +7,20 @@ class GameConfig {
 
   static const double cameraZoom = 18;
 
-  static const int worldTilesWide = 32 + 8; // playfield + radar strip
-  static const int worldTilesHigh = 32;
+  static const int playfieldTilesWide = 32;
+  static const int playfieldTilesHigh = 32;
+  static const int hudTilesWide = 8;
+
+  static const int worldTilesWide = playfieldTilesWide + hudTilesWide;
+  static const int worldTilesHigh = playfieldTilesHigh;
+
+  static const int flagsPerStage = 10;
+  static const int enemySpawnCount = 4;
+  static const int rocksPerStage = 14;
+
+  static const double maxFuel = 100;
+  static const double fuelDrainPerSecond = 3.5;
+  static const double smokeFuelCost = 9;
+  static const double smokeLifetimeSeconds = 2.0;
+  static const double flagBonusScore = 6;
 }

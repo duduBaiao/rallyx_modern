@@ -46,6 +46,7 @@ class PlayerCarComponent extends BodyComponent<RallyXGame> {
   static const double _lateralGrip = 0.85;
 
   final InputSource inputSource;
+  bool controlsEnabled = true;
 
   VehicleCommand _lastCommand = const VehicleCommand.idle();
 
@@ -59,6 +60,12 @@ class PlayerCarComponent extends BodyComponent<RallyXGame> {
   @override
   void update(double dt) {
     super.update(dt);
+
+    if (!controlsEnabled) {
+      body.linearVelocity = body.linearVelocity * 0.95;
+      body.angularVelocity *= 0.8;
+      return;
+    }
 
     final command = inputSource.poll(dt);
     _lastCommand = command;
