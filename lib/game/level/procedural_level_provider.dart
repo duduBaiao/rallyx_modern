@@ -182,9 +182,36 @@ class ProceduralLevelProvider implements LevelProvider {
   }
 
   TileCoordinate _pickPlayerSpawn(List<TileCoordinate> roads, Random random) {
-    final sorted = [...roads]..sort((a, b) => (a.x + a.y).compareTo(b.x + b.y));
-    final topLeftPoolSize = min(20, sorted.length);
-    return sorted[random.nextInt(topLeftPoolSize)];
+    final mapCenter = TileCoordinate(width ~/ 2, height ~/ 2);
+
+    List<TileCoordinate> pickCandidates(int margin) => roads
+        .where(
+          (tile) =>
+              tile.x >= margin &&
+              tile.y >= margin &&
+              tile.x < width - margin &&
+              tile.y < height - margin,
+        )
+        .toList();
+
+    var candidates = pickCandidates(6);
+    if (candidates.isEmpty) {
+      candidates = pickCandidates(4);
+    }
+    if (candidates.isEmpty) {
+      candidates = pickCandidates(2);
+    }
+    if (candidates.isEmpty) {
+      candidates = List<TileCoordinate>.from(roads);
+    }
+
+    candidates.sort(
+      (a, b) => a
+          .manhattanDistanceTo(mapCenter)
+          .compareTo(b.manhattanDistanceTo(mapCenter)),
+    );
+    final centerPoolSize = min(24, candidates.length);
+    return candidates[random.nextInt(centerPoolSize)];
   }
 
   void _placeRocks(

@@ -52,6 +52,18 @@ void main() {
         levelB.flags.map((flag) => flag.tile).toList(),
       );
     });
+
+    test('player spawn is not pinned to map corners', () {
+      final provider = ProceduralLevelProvider();
+
+      for (var stage = 1; stage <= 4; stage++) {
+        for (var seed = 2000; seed < 2020; seed++) {
+          final level = provider.loadLevel(stage: stage, seed: seed);
+          expect(level.playerSpawn.x, inInclusiveRange(2, level.width - 3));
+          expect(level.playerSpawn.y, inInclusiveRange(2, level.height - 3));
+        }
+      }
+    });
   });
 }
 

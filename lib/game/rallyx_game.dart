@@ -3,7 +3,6 @@ import 'dart:collection';
 import 'dart:math';
 
 import 'package:flame/components.dart';
-import 'package:flame/experimental.dart';
 import 'package:flame/input.dart';
 import 'package:flame_forge2d/flame_forge2d.dart';
 import 'package:flutter/services.dart';
@@ -109,15 +108,7 @@ class RallyXGame extends Forge2DGame<FixedStepForge2DWorld>
   @override
   Future<void> onLoad() async {
     await super.onLoad();
-
-    camera.setBounds(
-      Rectangle.fromLTRB(
-        0,
-        0,
-        GameConfig.playfieldTilesWide.toDouble(),
-        GameConfig.playfieldTilesHigh.toDouble(),
-      ),
-    );
+    _updateCameraZoomForViewport();
 
     await world.add(
       _BackdropComponent(
@@ -134,6 +125,12 @@ class RallyXGame extends Forge2DGame<FixedStepForge2DWorld>
   }
 
   @override
+  void onGameResize(Vector2 size) {
+    super.onGameResize(size);
+    _updateCameraZoomForViewport();
+  }
+
+  @override
   void update(double dt) {
     super.update(dt);
 
@@ -143,6 +140,8 @@ class RallyXGame extends Forge2DGame<FixedStepForge2DWorld>
           ? instantFps
           : (_smoothedFps * 0.9) + (instantFps * 0.1);
     }
+    _updateCameraZoomForViewport();
+    _updateCameraPosition();
 
     if (_isLoadingStage || isGameOver || playerCar == null) {
       return;
@@ -220,13 +219,16 @@ class RallyXGame extends Forge2DGame<FixedStepForge2DWorld>
     );
     currentLevel = level;
     await _addLevelToWorld(level);
+    _updateCameraZoomForViewport();
+    _setCameraPositionForTarget(level.playerSpawn.toWorldCenter());
 
     playerCar = PlayerCarComponent(
       inputSource: keyboardInputSource,
       spawnPosition: level.playerSpawn.toWorldCenter(),
     );
     await _levelLayer.add(playerCar!);
-    camera.follow(playerCar!, maxSpeed: 24, snap: true);
+    camera.stop();
+    _updateCameraPosition();
 
     _isLoadingStage = false;
   }
@@ -446,6 +448,77 @@ class RallyXGame extends Forge2DGame<FixedStepForge2DWorld>
       step = previous[step]!;
     }
     return step;
+  }
+
+  void _updateCameraZoomForViewport() {
+    if (!hasLayout) {
+      return;
+    }
+
+    var viewportWidth = canvasSize.x;
+    var viewportHeight = canvasSize.y;
+    if (isAttached) {
+      final boxSize = renderBox.size;
+      viewportWidth = boxSize.width;
+      viewportHeight = boxSize.height;
+    }
+    if (viewportWidth <= 0 || viewportHeight <= 0) {
+      return;
+    }
+
+    final minZoomForWidth = viewportWidth / GameConfig.playfieldTilesWide;
+    final minZoomForHeight = viewportHeight / GameConfig.playfieldTilesHigh;
+    final minZoomNoOverscan = max(minZoomForWidth, minZoomForHeight);
+
+    final rallyTargetWidthZoom =
+        viewportWidth / GameConfig.cameraTargetVisibleTiles;
+    final rallyTargetHeightZoom =
+        viewportHeight / GameConfig.cameraTargetVisibleTiles;
+    final rallyTargetZoom = max(rallyTargetWidthZoom, rallyTargetHeightZoom);
+
+    final targetZoom = max(
+      GameConfig.cameraZoom,
+      max(minZoomNoOverscan + 0.05, rallyTargetZoom),
+    );
+    if ((camera.viewfinder.zoom - targetZoom).abs() > 0.001) {
+      camera.viewfinder.zoom = targetZoom;
+    }
+  }
+
+  void _updateCameraPosition() {
+    final player = playerCar;
+    if (player == null || !hasLayout) {
+      return;
+    }
+    _setCameraPositionForTarget(player.body.position);
+  }
+
+  void _setCameraPositionForTarget(Vector2 target) {
+    if (!hasLayout) {
+      return;
+    }
+
+    final visibleRect = camera.visibleWorldRect;
+    final halfWidth = visibleRect.width / 2;
+    final halfHeight = visibleRect.height / 2;
+
+    var minX = halfWidth;
+    var maxX = GameConfig.playfieldTilesWide - halfWidth;
+    var minY = halfHeight;
+    var maxY = GameConfig.playfieldTilesHigh - halfHeight;
+
+    if (minX > maxX) {
+      minX = GameConfig.playfieldTilesWide / 2;
+      maxX = minX;
+    }
+    if (minY > maxY) {
+      minY = GameConfig.playfieldTilesHigh / 2;
+      maxY = minY;
+    }
+
+    final clampedX = target.x.clamp(minX, maxX).toDouble();
+    final clampedY = target.y.clamp(minY, maxY).toDouble();
+    camera.viewfinder.position = Vector2(clampedX, clampedY);
   }
 
   void toggleDebugOverlay() {

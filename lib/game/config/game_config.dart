@@ -6,6 +6,7 @@ class GameConfig {
   static const double maxAccumulatedTime = fixedTimeStep * 5;
 
   static const double cameraZoom = 18;
+  static const int cameraTargetVisibleTiles = 12;
 
   static const int playfieldTilesWide = 32;
   static const int playfieldTilesHigh = 32;
