@@ -9,20 +9,26 @@ class ProceduralLevelProvider implements LevelProvider {
     this.width = GameConfig.playfieldTilesWide,
     this.height = GameConfig.playfieldTilesHigh,
     this.maxAttempts = 32,
+    this.corridorWidth = 5,
+    this.wallThickness = 1,
   });
 
   final int width;
   final int height;
   final int maxAttempts;
+  final int corridorWidth;
+  final int wallThickness;
 
   @override
   LevelData loadLevel({required int stage, required int seed}) {
+    _validateDimensions();
+
     for (var attempt = 0; attempt < maxAttempts; attempt++) {
       final random = Random(_mixSeed(seed, stage, attempt));
       final tiles = _newFilledGrid(TileKind.wall);
 
-      _carveMaze(tiles, random);
-      _addLoops(tiles, random);
+      _carveWideMaze(tiles, random);
+      _addWideLoops(tiles, random);
 
       final roads = _collectTiles(tiles, TileKind.road);
       if (roads.length < 80) {
@@ -109,12 +115,20 @@ class ProceduralLevelProvider implements LevelProvider {
     );
   }
 
-  void _carveMaze(List<List<TileKind>> tiles, Random random) {
-    final start = TileCoordinate(1, 1);
-    tiles[start.y][start.x] = TileKind.road;
-    final stack = <TileCoordinate>[start];
+  void _carveWideMaze(List<List<TileKind>> tiles, Random random) {
+    final mazeWidth = _mazeCellsWide();
+    final mazeHeight = _mazeCellsHigh();
+    final visited = List<List<bool>>.generate(
+      mazeHeight,
+      (_) => List<bool>.filled(mazeWidth, false),
+    );
 
-    const directions = [(2, 0), (-2, 0), (0, 2), (0, -2)];
+    final start = TileCoordinate(0, 0);
+    final stack = <TileCoordinate>[start];
+    visited[start.y][start.x] = true;
+    _carveCellBlock(tiles, start.x, start.y);
+
+    const directions = <(int, int)>[(1, 0), (-1, 0), (0, 1), (0, -1)];
 
     while (stack.isNotEmpty) {
       final current = stack.last;
@@ -123,10 +137,10 @@ class ProceduralLevelProvider implements LevelProvider {
       for (final (dx, dy) in directions) {
         final nx = current.x + dx;
         final ny = current.y + dy;
-        if (!_isInterior(nx, ny)) {
+        if (!_isInsideMazeCell(nx, ny, mazeWidth, mazeHeight)) {
           continue;
         }
-        if (tiles[ny][nx] == TileKind.wall) {
+        if (!visited[ny][nx]) {
           candidates.add(TileCoordinate(nx, ny));
         }
       }
@@ -137,30 +151,28 @@ class ProceduralLevelProvider implements LevelProvider {
       }
 
       final next = candidates[random.nextInt(candidates.length)];
-      final betweenX = (current.x + next.x) ~/ 2;
-      final betweenY = (current.y + next.y) ~/ 2;
-      tiles[betweenY][betweenX] = TileKind.road;
-      tiles[next.y][next.x] = TileKind.road;
+      _carvePassage(tiles, current, next);
+      _carveCellBlock(tiles, next.x, next.y);
+      visited[next.y][next.x] = true;
       stack.add(next);
     }
   }
 
-  void _addLoops(List<List<TileKind>> tiles, Random random) {
+  void _addWideLoops(List<List<TileKind>> tiles, Random random) {
     const loopChance = 0.08;
 
-    for (var y = 1; y < height - 1; y++) {
-      for (var x = 1; x < width - 1; x++) {
-        if (tiles[y][x] != TileKind.wall) {
-          continue;
+    final mazeWidth = _mazeCellsWide();
+    final mazeHeight = _mazeCellsHigh();
+
+    for (var y = 0; y < mazeHeight; y++) {
+      for (var x = 0; x < mazeWidth; x++) {
+        final current = TileCoordinate(x, y);
+
+        if (x + 1 < mazeWidth && random.nextDouble() < loopChance) {
+          _carvePassage(tiles, current, TileCoordinate(x + 1, y));
         }
-        final horizontal =
-            tiles[y][x - 1] == TileKind.road &&
-            tiles[y][x + 1] == TileKind.road;
-        final vertical =
-            tiles[y - 1][x] == TileKind.road &&
-            tiles[y + 1][x] == TileKind.road;
-        if ((horizontal || vertical) && random.nextDouble() < loopChance) {
-          tiles[y][x] = TileKind.road;
+        if (y + 1 < mazeHeight && random.nextDouble() < loopChance) {
+          _carvePassage(tiles, current, TileCoordinate(x, y + 1));
         }
       }
     }
@@ -340,8 +352,94 @@ class ProceduralLevelProvider implements LevelProvider {
         .toList(growable: false);
   }
 
-  bool _isInterior(int x, int y) {
-    return x > 0 && y > 0 && x < width - 1 && y < height - 1;
+  int _mazeStep() => corridorWidth + wallThickness;
+
+  int _mazeCellsWide() => (width - wallThickness) ~/ _mazeStep();
+
+  int _mazeCellsHigh() => (height - wallThickness) ~/ _mazeStep();
+
+  void _validateDimensions() {
+    final step = _mazeStep();
+    if (corridorWidth <= 0 || wallThickness <= 0) {
+      throw StateError('corridorWidth and wallThickness must be positive');
+    }
+    if (width < step + wallThickness || height < step + wallThickness) {
+      throw StateError(
+        'Map too small for corridorWidth=$corridorWidth and wallThickness=$wallThickness',
+      );
+    }
+    final validWidth = (width - wallThickness) % step == 0;
+    final validHeight = (height - wallThickness) % step == 0;
+    if (!validWidth || !validHeight) {
+      throw StateError(
+        'Map dimensions must satisfy: size = N*(corridorWidth+wallThickness)+wallThickness',
+      );
+    }
+  }
+
+  bool _isInsideMazeCell(int x, int y, int mazeWidth, int mazeHeight) {
+    return x >= 0 && y >= 0 && x < mazeWidth && y < mazeHeight;
+  }
+
+  int _cellStart(int index) => wallThickness + index * _mazeStep();
+
+  void _carveCellBlock(List<List<TileKind>> tiles, int cellX, int cellY) {
+    final startX = _cellStart(cellX);
+    final startY = _cellStart(cellY);
+    for (var y = startY; y < startY + corridorWidth; y++) {
+      for (var x = startX; x < startX + corridorWidth; x++) {
+        tiles[y][x] = TileKind.road;
+      }
+    }
+  }
+
+  void _carvePassage(
+    List<List<TileKind>> tiles,
+    TileCoordinate from,
+    TileCoordinate to,
+  ) {
+    final dx = to.x - from.x;
+    final dy = to.y - from.y;
+    if (!((dx.abs() == 1 && dy == 0) || (dy.abs() == 1 && dx == 0))) {
+      return;
+    }
+
+    final fromStartX = _cellStart(from.x);
+    final fromStartY = _cellStart(from.y);
+
+    if (dx == 1) {
+      final gapStartX = fromStartX + corridorWidth;
+      for (var y = fromStartY; y < fromStartY + corridorWidth; y++) {
+        for (var x = gapStartX; x < gapStartX + wallThickness; x++) {
+          tiles[y][x] = TileKind.road;
+        }
+      }
+      return;
+    }
+    if (dx == -1) {
+      final gapStartX = fromStartX - wallThickness;
+      for (var y = fromStartY; y < fromStartY + corridorWidth; y++) {
+        for (var x = gapStartX; x < gapStartX + wallThickness; x++) {
+          tiles[y][x] = TileKind.road;
+        }
+      }
+      return;
+    }
+    if (dy == 1) {
+      final gapStartY = fromStartY + corridorWidth;
+      for (var y = gapStartY; y < gapStartY + wallThickness; y++) {
+        for (var x = fromStartX; x < fromStartX + corridorWidth; x++) {
+          tiles[y][x] = TileKind.road;
+        }
+      }
+      return;
+    }
+    final gapStartY = fromStartY - wallThickness;
+    for (var y = gapStartY; y < gapStartY + wallThickness; y++) {
+      for (var x = fromStartX; x < fromStartX + corridorWidth; x++) {
+        tiles[y][x] = TileKind.road;
+      }
+    }
   }
 
   int _mixSeed(int seed, int stage, int attempt) {

@@ -8,8 +8,8 @@ class GameConfig {
   static const double cameraZoom = 18;
   static const int cameraTargetVisibleTiles = 12;
 
-  static const int playfieldTilesWide = 32;
-  static const int playfieldTilesHigh = 32;
+  static const int playfieldTilesWide = 97;
+  static const int playfieldTilesHigh = 97;
   static const int hudTilesWide = 8;
 
   static const int worldTilesWide = playfieldTilesWide + hudTilesWide;
