@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:rallyx_modern/game/config/game_config.dart';
 import 'package:rallyx_modern/game/level/level_data.dart';
 import 'package:rallyx_modern/game/rallyx_game.dart';
 
@@ -38,99 +37,29 @@ class _HudOverlayState extends State<HudOverlay> {
   @override
   Widget build(BuildContext context) {
     final level = widget.game.currentLevel;
-    final fuelRatio = (widget.game.fuel / GameConfig.maxFuel).clamp(0, 1);
 
-    return SafeArea(
-      child: Align(
-        alignment: Alignment.topRight,
-        child: Container(
-          width: 250,
-          margin: const EdgeInsets.all(12),
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: const Color(0xCC0B0D12),
-            border: Border.all(color: const Color(0xFF30394A)),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'RALLY-X MODERN',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 1.0,
-                ),
-              ),
-              const SizedBox(height: 10),
-              _valueLine('Stage', '${widget.game.currentStage}'),
-              _valueLine('State', widget.game.runState),
-              _valueLine(
-                'Survival',
-                '${widget.game.survivalTime.toStringAsFixed(1)}s',
-              ),
-              _valueLine('Score', widget.game.score.toStringAsFixed(1)),
-              _valueLine('Flags Left', '${widget.game.remainingFlagCount}'),
-              const SizedBox(height: 10),
-              const Text('Fuel', style: TextStyle(color: Colors.white70)),
-              const SizedBox(height: 4),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(4),
-                child: LinearProgressIndicator(
-                  minHeight: 10,
-                  value: fuelRatio.toDouble(),
-                  backgroundColor: const Color(0xFF232A36),
-                  valueColor: AlwaysStoppedAnimation<Color>(
-                    fuelRatio > 0.35
-                        ? const Color(0xFF58D66B)
-                        : const Color(0xFFEA5D5D),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              const Text('Minimap', style: TextStyle(color: Colors.white70)),
-              const SizedBox(height: 6),
-              AspectRatio(
-                aspectRatio: 1,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF0A0E14),
-                    border: Border.all(color: const Color(0xFF30394A)),
-                  ),
-                  child: level == null
-                      ? const SizedBox.shrink()
-                      : CustomPaint(
-                          painter: _MinimapPainter(
-                            level: level,
-                            player: widget.game.playerTile,
-                            enemies: widget.game.enemyTiles,
-                            flags: widget.game.remainingFlags,
-                          ),
-                        ),
-                ),
-              ),
-            ],
-          ),
-        ),
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        color: Color(0xFF0A0E14),
+        border: Border(left: BorderSide(color: Color(0xFF30394A))),
       ),
-    );
-  }
-
-  Widget _valueLine(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 2),
-      child: Text.rich(
-        TextSpan(
-          text: '$label: ',
-          style: const TextStyle(color: Colors.white70),
-          children: [
-            TextSpan(
-              text: value,
-              style: const TextStyle(color: Colors.white),
-            ),
-          ],
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: AspectRatio(
+            aspectRatio: 1,
+            child: level == null
+                ? const SizedBox.shrink()
+                : CustomPaint(
+                    painter: _MinimapPainter(
+                      level: level,
+                      player: widget.game.playerTile,
+                      enemies: widget.game.enemyTiles,
+                      flags: widget.game.remainingFlags,
+                    ),
+                    child: const SizedBox.expand(),
+                  ),
+          ),
         ),
       ),
     );

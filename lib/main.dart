@@ -21,14 +21,25 @@ class RallyXApp extends StatelessWidget {
       title: 'Rally-X Modern',
       debugShowCheckedModeBanner: false,
       home: Scaffold(
-        body: GameWidget<RallyXGame>(
-          game: game,
-          overlayBuilderMap: {
-            HudOverlay.id: (context, game) => HudOverlay(game: game),
-            GameOverOverlay.id: (context, game) => GameOverOverlay(game: game),
-            DebugOverlay.id: (context, game) => DebugOverlay(game: game),
-          },
-          initialActiveOverlays: const [HudOverlay.id, GameOverOverlay.id],
+        body: SafeArea(
+          child: Row(
+            children: [
+              Expanded(
+                flex: 8,
+                child: GameWidget<RallyXGame>(
+                  game: game,
+                  overlayBuilderMap: {
+                    GameOverOverlay.id: (context, game) =>
+                        GameOverOverlay(game: game),
+                    DebugOverlay.id: (context, game) =>
+                        DebugOverlay(game: game),
+                  },
+                  initialActiveOverlays: const [GameOverOverlay.id],
+                ),
+              ),
+              Expanded(flex: 2, child: HudOverlay(game: game)),
+            ],
+          ),
         ),
       ),
     );
