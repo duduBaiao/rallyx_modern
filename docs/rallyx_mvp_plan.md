@@ -142,7 +142,7 @@ Debug overlay (toggle):
 - Score basis: survival time (+ flag bonus contribution).
 - Keep sorted leaderboard and trim to 10 entries.
 
-## 10. Milestones
+## 10. Milestones (Summary)
 
 1. M0: Bootstrap Flame/Forge2D project and 60 FPS loop.
 2. M1: Input abstraction + player car movement.
@@ -153,7 +153,92 @@ Debug overlay (toggle):
 7. M6: High-score persistence + game-over/restart flow.
 8. M7: Unit tests + balancing + bugfix pass.
 
-## 11. Definition of Done (MVP)
+## 11. Milestone Task Board
+
+Status legend:
+
+- [ ] Not started
+- [x] Completed
+
+### M0 - Bootstrap
+
+- [ ] Create Flutter desktop project with Windows and macOS enabled.
+- [ ] Add dependencies: `flame`, `flame_forge2d`, `shared_preferences`.
+- [ ] Implement base `RallyXGame` using `Forge2DGame`.
+- [ ] Set up fixed-step simulation targeting 60 Hz.
+- [ ] Add placeholder camera and empty world scene.
+- [ ] Add debug overlay toggle scaffold.
+- [ ] Exit criteria: app runs on Windows/macOS and game loop is stable.
+
+### M1 - Input + Player Driving
+
+- [ ] Add `VehicleCommand` model (`throttle`, `brake`, `steering`, `smoke`).
+- [ ] Add `InputSource` interface with frame polling.
+- [ ] Implement `KeyboardInputSource`.
+- [ ] Implement `PlayerCarComponent` with semi-arcade movement.
+- [ ] Implement reverse-at-low-speed behavior.
+- [ ] Tune wall collision to slide rather than bounce.
+- [ ] Exit criteria: arrow keys + smoke control drive the car correctly.
+
+### M2 - Procedural Level
+
+- [ ] Add `LevelProvider` abstraction and `ProceduralLevelProvider`.
+- [ ] Generate connected 32x32 maze with tile-aligned corridors.
+- [ ] Build static wall and rock colliders from generated map.
+- [ ] Add spawn placement for player, enemies, and flags.
+- [ ] Place exactly 10 flags including one special flag.
+- [ ] Validate reachability from player spawn to all flags.
+- [ ] Exit criteria: every run creates a valid playable level.
+
+### M3 - Core Gameplay Systems
+
+- [ ] Implement `FuelSystem` with passive fuel drain.
+- [ ] Implement smoke action and fuel consumption.
+- [ ] Implement smoke cloud and enemy stun timing.
+- [ ] Implement `ScoringSystem` (survival time + flag bonus).
+- [ ] Implement stage clear condition when all flags are collected.
+- [ ] Refill fuel to full at stage transition.
+- [ ] Exit criteria: complete Rally-X-like survival loop works without enemies.
+
+### M4 - Enemies (Tesla Robo-Taxis)
+
+- [ ] Implement `EnemyCarComponent`.
+- [ ] Implement simple physics-like chase controller.
+- [ ] Add corridor-graph waypoint guidance.
+- [ ] Apply smoke stun effect to enemies.
+- [ ] Implement one-hit collision game-over.
+- [ ] Add per-stage difficulty scaling (count/speed/tuning).
+- [ ] Exit criteria: enemies chase reliably and create survival pressure.
+
+### M5 - HUD, Minimap, Camera Polish
+
+- [ ] Implement HUD for fuel, survival time, and stage.
+- [ ] Implement full-map minimap panel.
+- [ ] Add minimap markers for player, enemies, and flags.
+- [ ] Tune smooth-follow camera and clamp to map bounds.
+- [ ] Add clear game-over overlay and restart action.
+- [ ] Exit criteria: gameplay information is always visible and readable.
+
+### M6 - Persistence + Run Loop Finalization
+
+- [ ] Implement `HighScoreRepository` with SharedPreferences.
+- [ ] Persist and load top 10 scores.
+- [ ] Sort descending and trim leaderboard to 10.
+- [ ] Connect score submission on game-over.
+- [ ] Ensure restart resets runtime state cleanly.
+- [ ] Exit criteria: scores persist across app restarts.
+
+### M7 - Tests, Debug, Tuning
+
+- [ ] Add debug metrics: FPS, seed, speed, fuel, stage, enemy count.
+- [ ] Add unit tests for input mapping.
+- [ ] Add unit tests for generation reachability.
+- [ ] Add unit tests for scoring and leaderboard logic.
+- [ ] Perform balancing pass for fuel drain, enemy speed, and smoke duration.
+- [ ] Run regression pass on stage transitions and game-over paths.
+- [ ] Exit criteria: tests pass and MVP gameplay feels stable.
+
+## 12. Definition of Done (MVP)
 
 - Playable desktop game on macOS/Windows.
 - Continuous driving in generated maze with Rally-X-like loop.
