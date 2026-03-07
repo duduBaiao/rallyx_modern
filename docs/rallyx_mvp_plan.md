@@ -173,13 +173,14 @@ Status legend:
 
 ### M1 - Input + Player Driving
 
-- [ ] Add `VehicleCommand` model (`throttle`, `brake`, `steering`, `smoke`).
-- [ ] Add `InputSource` interface with frame polling.
-- [ ] Implement `KeyboardInputSource`.
-- [ ] Implement `PlayerCarComponent` with semi-arcade movement.
-- [ ] Implement reverse-at-low-speed behavior.
-- [ ] Tune wall collision to slide rather than bounce.
+- [x] Add `VehicleCommand` model (`throttle`, `brake`, `steering`, `smoke`).
+- [x] Add `InputSource` interface with frame polling.
+- [x] Implement `KeyboardInputSource`.
+- [x] Implement `PlayerCarComponent` with semi-arcade movement.
+- [x] Implement reverse-at-low-speed behavior.
+- [x] Tune wall collision to slide rather than bounce.
 - [ ] Exit criteria: arrow keys + smoke control drive the car correctly.
+  - Validation note (2026-03-07): input mapping tests pass; manual driving verification pending.
 
 ### M2 - Procedural Level
 

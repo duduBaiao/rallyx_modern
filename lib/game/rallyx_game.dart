@@ -4,6 +4,10 @@ import 'package:flame_forge2d/flame_forge2d.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:rallyx_modern/game/config/game_config.dart';
+import 'package:rallyx_modern/game/entities/boundary_wall_component.dart';
+import 'package:rallyx_modern/game/entities/player_car_component.dart';
+import 'package:rallyx_modern/game/input/keyboard_input_source.dart';
+import 'package:rallyx_modern/game/input/vehicle_command.dart';
 import 'package:rallyx_modern/game/ui/debug_overlay.dart';
 import 'package:rallyx_modern/game/world/fixed_step_forge2d_world.dart';
 
@@ -15,7 +19,14 @@ class RallyXGame extends Forge2DGame<FixedStepForge2DWorld>
         zoom: GameConfig.cameraZoom,
       );
 
+  final keyboardInputSource = KeyboardInputSource();
+  PlayerCarComponent? playerCar;
+
   bool debugOverlayVisible = false;
+
+  double get playerSpeed => playerCar?.speed ?? 0;
+  VehicleCommand get currentCommand =>
+      playerCar?.lastCommand ?? const VehicleCommand.idle();
 
   @override
   Color backgroundColor() => const Color(0xFF0E1116);
@@ -38,6 +49,16 @@ class RallyXGame extends Forge2DGame<FixedStepForge2DWorld>
         ),
       ),
     );
+
+    await world.addAll(_createBoundaryWalls());
+
+    playerCar = PlayerCarComponent(
+      inputSource: keyboardInputSource,
+      spawnPosition: center,
+    );
+    await world.add(playerCar!);
+
+    camera.follow(playerCar!, maxSpeed: 24, snap: true);
   }
 
   @override
@@ -45,11 +66,27 @@ class RallyXGame extends Forge2DGame<FixedStepForge2DWorld>
     KeyEvent event,
     Set<LogicalKeyboardKey> keysPressed,
   ) {
+    keyboardInputSource.handleKeyEvent(event);
+
     if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.f3) {
       toggleDebugOverlay();
       return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;
+  }
+
+  List<BoundaryWallComponent> _createBoundaryWalls() {
+    final left = 0.0;
+    final top = 0.0;
+    final right = GameConfig.worldTilesWide.toDouble();
+    final bottom = GameConfig.worldTilesHigh.toDouble();
+
+    return [
+      BoundaryWallComponent(Vector2(left, top), Vector2(right, top)),
+      BoundaryWallComponent(Vector2(right, top), Vector2(right, bottom)),
+      BoundaryWallComponent(Vector2(left, bottom), Vector2(right, bottom)),
+      BoundaryWallComponent(Vector2(left, top), Vector2(left, bottom)),
+    ];
   }
 
   void toggleDebugOverlay() {
