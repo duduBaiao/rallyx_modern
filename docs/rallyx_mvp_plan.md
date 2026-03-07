@@ -162,13 +162,14 @@ Status legend:
 
 ### M0 - Bootstrap
 
-- [ ] Create Flutter desktop project with Windows and macOS enabled.
-- [ ] Add dependencies: `flame`, `flame_forge2d`, `shared_preferences`.
-- [ ] Implement base `RallyXGame` using `Forge2DGame`.
-- [ ] Set up fixed-step simulation targeting 60 Hz.
-- [ ] Add placeholder camera and empty world scene.
-- [ ] Add debug overlay toggle scaffold.
+- [x] Create Flutter desktop project with Windows and macOS enabled.
+- [x] Add dependencies: `flame`, `flame_forge2d`, `shared_preferences`.
+- [x] Implement base `RallyXGame` using `Forge2DGame`.
+- [x] Set up fixed-step simulation targeting 60 Hz.
+- [x] Add placeholder camera and empty world scene.
+- [x] Add debug overlay toggle scaffold.
 - [ ] Exit criteria: app runs on Windows/macOS and game loop is stable.
+  - Validation note (2026-03-07): `flutter build macos` succeeded; Windows runtime check pending.
 
 ### M1 - Input + Player Driving
 
