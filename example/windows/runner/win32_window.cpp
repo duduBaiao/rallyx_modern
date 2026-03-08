@@ -17,6 +17,8 @@ namespace {
 #endif
 
 constexpr const wchar_t kWindowClassName[] = L"FLUTTER_RUNNER_WIN32_WINDOW";
+constexpr const wchar_t kBorderlessWindowClassName[] =
+    L"FLUTTER_RUNNER_WIN32_WINDOW_BORDERLESS";
 
 /// Registry key for app theme preference.
 ///
@@ -54,6 +56,15 @@ void EnableFullDpiSupportIfAvailable(HWND hwnd) {
 }
 
 }  // namespace
+
+RECT GetVirtualScreenBounds() {
+  RECT bounds;
+  bounds.left = GetSystemMetrics(SM_XVIRTUALSCREEN);
+  bounds.top = GetSystemMetrics(SM_YVIRTUALSCREEN);
+  bounds.right = bounds.left + GetSystemMetrics(SM_CXVIRTUALSCREEN);
+  bounds.bottom = bounds.top + GetSystemMetrics(SM_CYVIRTUALSCREEN);
+  return bounds;
+}
 
 // Manages the Win32Window's window class registration.
 class WindowClassRegistrar {
@@ -101,6 +112,22 @@ const wchar_t* WindowClassRegistrar::GetWindowClass() {
     window_class.lpszMenuName = nullptr;
     window_class.lpfnWndProc = Win32Window::WndProc;
     RegisterClass(&window_class);
+
+    WNDCLASS borderless_class{};
+    borderless_class.hCursor = LoadCursor(nullptr, IDC_ARROW);
+    borderless_class.lpszClassName = kBorderlessWindowClassName;
+    borderless_class.style = CS_HREDRAW | CS_VREDRAW;
+    borderless_class.cbClsExtra = 0;
+    borderless_class.cbWndExtra = 0;
+    borderless_class.hInstance = GetModuleHandle(nullptr);
+    borderless_class.hIcon =
+        LoadIcon(borderless_class.hInstance, MAKEINTRESOURCE(IDI_APP_ICON));
+    borderless_class.hbrBackground =
+        reinterpret_cast<HBRUSH>(GetStockObject(BLACK_BRUSH));
+    borderless_class.lpszMenuName = nullptr;
+    borderless_class.lpfnWndProc = Win32Window::WndProc;
+    RegisterClass(&borderless_class);
+
     class_registered_ = true;
   }
   return kWindowClassName;
@@ -108,6 +135,7 @@ const wchar_t* WindowClassRegistrar::GetWindowClass() {
 
 void WindowClassRegistrar::UnregisterWindowClass() {
   UnregisterClass(kWindowClassName, nullptr);
+  UnregisterClass(kBorderlessWindowClassName, nullptr);
   class_registered_ = false;
 }
 
@@ -147,6 +175,40 @@ bool Win32Window::Create(const std::wstring& title,
   UpdateTheme(window);
 
   return OnCreate();
+}
+
+bool Win32Window::CreateFullscreen(const std::wstring& title) {
+  Destroy();
+
+  WindowClassRegistrar::GetInstance()->GetWindowClass();
+
+  RECT bounds = GetVirtualScreenBounds();
+  int width = bounds.right - bounds.left;
+  int height = bounds.bottom - bounds.top;
+
+  HWND window = CreateWindowEx(
+      WS_EX_APPWINDOW, kBorderlessWindowClassName, title.c_str(),
+      WS_POPUP | WS_VISIBLE, bounds.left, bounds.top, width, height, nullptr,
+      nullptr, GetModuleHandle(nullptr), this);
+
+  if (!window) {
+    return false;
+  }
+
+  return OnCreate();
+}
+
+void Win32Window::ExpandAcrossAllDisplays() {
+  if (!window_handle_) {
+    return;
+  }
+
+  RECT bounds = GetVirtualScreenBounds();
+  int width = bounds.right - bounds.left;
+  int height = bounds.bottom - bounds.top;
+
+  SetWindowPos(window_handle_, HWND_TOP, bounds.left, bounds.top, width, height,
+               SWP_FRAMECHANGED);
 }
 
 bool Win32Window::Show() {

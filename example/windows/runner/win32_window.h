@@ -7,6 +7,9 @@
 #include <memory>
 #include <string>
 
+// Gets the bounding rectangle of all monitors (virtual screen).
+RECT GetVirtualScreenBounds();
+
 // A class abstraction for a high DPI-aware Win32 Window. Intended to be
 // inherited from by classes that wish to specialize with custom
 // rendering and input handling
@@ -35,6 +38,14 @@ class Win32Window {
   // as appropriate for the default monitor. The window is invisible until
   // |Show| is called. Returns true if the window was created successfully.
   bool Create(const std::wstring& title, const Point& origin, const Size& size);
+
+  // Creates a borderless window that spans all monitors.
+  // The window is invisible until |Show| is called.
+  // Returns true if the window was created successfully.
+  bool CreateFullscreen(const std::wstring& title);
+
+  // Expands the window to cover all monitors.
+  void ExpandAcrossAllDisplays();
 
   // Show the current window. Returns true if the window was successfully shown.
   bool Show();
