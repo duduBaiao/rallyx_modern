@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:rallyx_modern/game/level/level_data.dart';
@@ -37,32 +38,110 @@ class _HudOverlayState extends State<HudOverlay> {
   @override
   Widget build(BuildContext context) {
     final level = widget.game.currentLevel;
+    final fuelPercent = widget.game.fuelPercent;
+    final fuelProgress = (fuelPercent / 100).clamp(0.0, 1.0);
 
     return DecoratedBox(
       decoration: const BoxDecoration(
         color: Color(0xFF0A0E14),
         border: Border(left: BorderSide(color: Color(0xFF30394A))),
       ),
-      child: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: AspectRatio(
-            aspectRatio: level == null ? 1 : level.width / level.height,
-            child: level == null
-                ? const SizedBox.shrink()
-                : CustomPaint(
-                    painter: _MinimapPainter(
-                      level: level,
-                      player: widget.game.playerTile,
-                      enemies: widget.game.enemyTiles,
-                      flags: widget.game.remainingFlags,
-                    ),
-                    child: const SizedBox.expand(),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final minimapAspect = level == null
+                ? 1.0
+                : level.width / level.height;
+            const headerHeight = 36.0;
+            const gapBeforeMinimap = 12.0;
+            final minimapMaxHeight = math.max(
+              0.0,
+              constraints.maxHeight - headerHeight - gapBeforeMinimap,
+            );
+            final minimapHeightForWidth = constraints.maxWidth / minimapAspect;
+            final minimapHeight = math.min(
+              minimapMaxHeight,
+              minimapHeightForWidth,
+            );
+            final minimapWidth = minimapHeight * minimapAspect;
+
+            return Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      const Text(
+                        'Fuel',
+                        style: TextStyle(
+                          color: Color(0xFFB8C2D1),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const Spacer(),
+                      Text(
+                        '${fuelPercent.toStringAsFixed(0)}%',
+                        style: const TextStyle(
+                          color: Color(0xFFE6EDF7),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
                   ),
-          ),
+                  const SizedBox(height: 6),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: SizedBox(
+                      height: 8,
+                      child: LinearProgressIndicator(
+                        value: fuelProgress,
+                        backgroundColor: const Color(0xFF253041),
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          _fuelColorForProgress(fuelProgress),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: gapBeforeMinimap),
+                  Align(
+                    alignment: Alignment.center,
+                    child: SizedBox(
+                      width: minimapWidth,
+                      height: minimapHeight,
+                      child: level == null
+                          ? const SizedBox.shrink()
+                          : CustomPaint(
+                              painter: _MinimapPainter(
+                                level: level,
+                                player: widget.game.playerTile,
+                                enemies: widget.game.enemyTiles,
+                                flags: widget.game.remainingFlags,
+                              ),
+                              child: const SizedBox.expand(),
+                            ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
         ),
       ),
     );
+  }
+
+  Color _fuelColorForProgress(double progress) {
+    if (progress <= 0.2) {
+      return const Color(0xFFE75A5A);
+    }
+    if (progress <= 0.5) {
+      return const Color(0xFFF2C94C);
+    }
+    return const Color(0xFF46C67A);
   }
 }
 
