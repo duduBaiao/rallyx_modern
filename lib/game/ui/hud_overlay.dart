@@ -47,7 +47,7 @@ class _HudOverlayState extends State<HudOverlay> {
         child: Padding(
           padding: const EdgeInsets.all(12),
           child: AspectRatio(
-            aspectRatio: 1,
+            aspectRatio: level == null ? 1 : level.width / level.height,
             child: level == null
                 ? const SizedBox.shrink()
                 : CustomPaint(
@@ -90,6 +90,7 @@ class _MinimapPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final tileW = size.width / level.width;
     final tileH = size.height / level.height;
+    final tileMin = tileW < tileH ? tileW : tileH;
 
     for (var y = 0; y < level.height; y++) {
       for (var x = 0; x < level.width; x++) {
@@ -98,7 +99,7 @@ class _MinimapPainter extends CustomPainter {
         if (kind == TileKind.wall) {
           canvas.drawRect(rect, _wallPaint);
         } else if (kind == TileKind.rock) {
-          canvas.drawOval(rect.deflate(tileW * 0.2), _rockPaint);
+          canvas.drawOval(rect.deflate(tileMin * 0.2), _rockPaint);
         }
       }
     }
@@ -115,13 +116,13 @@ class _MinimapPainter extends CustomPainter {
 
     for (final enemy in enemies) {
       final center = Offset((enemy.x + 0.5) * tileW, (enemy.y + 0.5) * tileH);
-      canvas.drawCircle(center, tileW * 0.3, _enemyPaint);
+      canvas.drawCircle(center, tileMin * 0.3, _enemyPaint);
     }
 
     final p = player;
     if (p != null) {
       final center = Offset((p.x + 0.5) * tileW, (p.y + 0.5) * tileH);
-      canvas.drawCircle(center, tileW * 0.35, _playerPaint);
+      canvas.drawCircle(center, tileMin * 0.35, _playerPaint);
     }
   }
 
