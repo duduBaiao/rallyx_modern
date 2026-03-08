@@ -24,7 +24,7 @@ class GameConfig {
   static const int rocksPerStage = 14;
 
   static const double maxFuel = 100;
-  static const double fuelDrainPerSecond = 3.5;
+  static const double fuelDrainPerSecond = 0.7;
   static const double fuelDrainSpeedThreshold = 0.05;
   static const double idleFuelDrainFactor = 0.25;
   static const double smokeFuelCost = 9;
