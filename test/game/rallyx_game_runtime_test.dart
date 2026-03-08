@@ -2,12 +2,46 @@ import 'package:flame/game.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:rallyx_modern/game/config/game_config.dart';
 import 'package:rallyx_modern/game/input/keyboard_input_source.dart';
 import 'package:rallyx_modern/game/rallyx_game.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
-  testWidgets('fuel depletion triggers game over and restart clears state', (
+  testWidgets(
+    'fuel depletion while moving triggers game over and restart clears state',
+    (WidgetTester tester) async {
+      SharedPreferences.setMockInitialValues({});
+      final inputSource = KeyboardInputSource();
+      final game = RallyXGame(inputSource: inputSource);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(body: GameWidget<RallyXGame>(game: game)),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 600));
+
+      expect(game.playerCar, isNotNull);
+      expect(game.isGameOver, isFalse);
+
+      game.playerCar!.body.linearVelocity = Vector2(1.2, 0);
+      game.fuel = 0.01;
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(game.isGameOver, isTrue);
+      expect(game.gameOverReason, isNotEmpty);
+
+      game.requestRestart();
+      await tester.pump(const Duration(milliseconds: 700));
+
+      expect(game.isGameOver, isFalse);
+      expect(game.currentStage, 1);
+      expect(game.fuel, greaterThan(0));
+    },
+  );
+
+  testWidgets('fuel drains at reduced rate while player is idle', (
     WidgetTester tester,
   ) async {
     SharedPreferences.setMockInitialValues({});
@@ -22,20 +56,42 @@ void main() {
     await tester.pump(const Duration(milliseconds: 600));
 
     expect(game.playerCar, isNotNull);
-    expect(game.isGameOver, isFalse);
+    final fuelBefore = game.fuel;
 
-    game.fuel = 0.01;
-    await tester.pump(const Duration(milliseconds: 200));
+    await tester.pump(const Duration(milliseconds: 400));
 
-    expect(game.isGameOver, isTrue);
-    expect(game.gameOverReason, isNotEmpty);
+    final expectedIdleDrain =
+        GameConfig.fuelDrainPerSecond * GameConfig.idleFuelDrainFactor * 0.4;
+    expect(game.fuel, closeTo(fuelBefore - expectedIdleDrain, 0.2));
+  });
 
-    game.requestRestart();
-    await tester.pump(const Duration(milliseconds: 700));
+  testWidgets('moving drains more fuel than idling', (
+    WidgetTester tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final inputSource = KeyboardInputSource();
+    final game = RallyXGame(inputSource: inputSource);
 
-    expect(game.isGameOver, isFalse);
-    expect(game.currentStage, 1);
-    expect(game.fuel, greaterThan(0));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: GameWidget<RallyXGame>(game: game)),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 600));
+
+    expect(game.playerCar, isNotNull);
+    final fuelAtStart = game.fuel;
+
+    await tester.pump(const Duration(milliseconds: 400));
+    final fuelAfterIdle = game.fuel;
+    final idleDrain = fuelAtStart - fuelAfterIdle;
+
+    game.playerCar!.body.linearVelocity = Vector2(1.2, 0);
+    await tester.pump(const Duration(milliseconds: 400));
+    final movingDrain = fuelAfterIdle - game.fuel;
+
+    expect(idleDrain, greaterThan(0));
+    expect(movingDrain, greaterThan(idleDrain));
   });
 
   testWidgets('debugCollectAllFlags advances stage and refills fuel', (

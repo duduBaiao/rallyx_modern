@@ -148,7 +148,9 @@ class RallyXGame extends Forge2DGame<FixedStepForge2DWorld>
     }
 
     survivalTime += dt;
-    _consumeFuel(GameConfig.fuelDrainPerSecond * dt);
+    final moving = playerCar!.speed > GameConfig.fuelDrainSpeedThreshold;
+    final drainMultiplier = moving ? 1.0 : GameConfig.idleFuelDrainFactor;
+    _consumeFuel(GameConfig.fuelDrainPerSecond * drainMultiplier * dt);
     _handleSmokeInput();
     _checkFlagCollection();
     _updateSmokeEffectsOnEnemies();
