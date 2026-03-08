@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rallyx_modern/main.dart';
+import 'package:example/main.dart';
 
 void main() {
   testWidgets('App boots with game root widget', (WidgetTester tester) async {

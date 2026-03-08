@@ -7,8 +7,10 @@ import 'package:rallyx_modern/game/input/vehicle_command.dart';
 class KeyboardInputSource implements InputSource {
   final Set<LogicalKeyboardKey> _pressedKeys = <LogicalKeyboardKey>{};
 
+  @override
   void clear() => _pressedKeys.clear();
 
+  @override
   void handleKeyEvent(KeyEvent event) {
     if (event is KeyDownEvent || event is KeyRepeatEvent) {
       _pressedKeys.add(event.logicalKey);

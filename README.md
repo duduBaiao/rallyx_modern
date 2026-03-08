@@ -1,16 +1,30 @@
 # rallyx_modern
 
-A new Flutter project.
+`rallyx_modern` is a Flutter game library for a Rally-X inspired top-down
+driving game built with Flame + Forge2D.
 
-## Getting Started
+## Library API
 
-This project is a starting point for a Flutter application.
+Import the package entrypoint:
 
-A few resources to get you started if this is your first Flutter project:
+```dart
+import 'package:rallyx_modern/rallyx_modern.dart';
+```
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+The library exports the minimum public classes needed to run and embed the
+game:
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+- `RallyXGame`
+- `InputSource` / `KeyboardInputSource` / `VehicleCommand`
+- `HudOverlay`, `DebugOverlay`, `GameOverOverlay`
+
+## Example App
+
+A runnable app using this package lives in [`example/`](example).
+
+Run from `example/`:
+
+```bash
+flutter run -d macos
+flutter run -d windows
+```

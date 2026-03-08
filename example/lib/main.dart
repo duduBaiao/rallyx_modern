@@ -1,10 +1,6 @@
 import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
-import 'package:rallyx_modern/game/input/keyboard_input_source.dart';
-import 'package:rallyx_modern/game/rallyx_game.dart';
-import 'package:rallyx_modern/game/ui/debug_overlay.dart';
-import 'package:rallyx_modern/game/ui/game_over_overlay.dart';
-import 'package:rallyx_modern/game/ui/hud_overlay.dart';
+import 'package:rallyx_modern/rallyx_modern.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();

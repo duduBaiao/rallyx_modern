@@ -74,7 +74,7 @@ packages:
     source: hosted
     version: "1.35.1"
   flame_forge2d:
-    dependency: "direct main"
+    dependency: transitive
     description:
       name: flame_forge2d
       sha256: d97489ee57aac20bc805da8e5c756163eabbc3fe173218b48f3e4bdc8060d874
@@ -224,8 +224,15 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.1.8"
-  shared_preferences:
+  rallyx_modern:
     dependency: "direct main"
+    description:
+      path: ".."
+      relative: true
+    source: path
+    version: "0.0.1"
+  shared_preferences:
+    dependency: transitive
     description:
       name: shared_preferences
       sha256: "2939ae520c9024cb197fc20dee269cd8cdbf564c8b5746374ec6cacdc5169e64"
