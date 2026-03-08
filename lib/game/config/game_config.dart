@@ -7,10 +7,14 @@ class GameConfig {
 
   static const double cameraZoom = 18;
   static const int cameraTargetVisibleTiles = 12;
+  static const double idealViewportWidthPx = 1920;
+  static const double idealViewportHeightPx = 1080;
 
   static const int playfieldTilesWide = 97;
   static const int playfieldTilesHigh = 97;
   static const int hudTilesWide = 8;
+  static const int proceduralDimensionStep = 6;
+  static const int proceduralDimensionOffset = 1;
 
   static const int worldTilesWide = playfieldTilesWide + hudTilesWide;
   static const int worldTilesHigh = playfieldTilesHigh;

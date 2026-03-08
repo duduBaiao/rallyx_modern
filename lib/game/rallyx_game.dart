@@ -33,7 +33,8 @@ class RallyXGame extends Forge2DGame<FixedStepForge2DWorld>
     Random? seedRandom,
     int initialSeed = 1980,
     this.debugEnemyCountOverride,
-  }) : levelProvider = levelProvider ?? ProceduralLevelProvider(),
+  }) : _usesDefaultProceduralLevelProvider = levelProvider == null,
+       levelProvider = levelProvider ?? ProceduralLevelProvider(),
        highScoreRepository =
            highScoreRepository ?? SharedPrefsHighScoreRepository(),
        _seedRandom = seedRandom ?? Random(),
@@ -44,6 +45,7 @@ class RallyXGame extends Forge2DGame<FixedStepForge2DWorld>
        );
 
   final LevelProvider levelProvider;
+  final bool _usesDefaultProceduralLevelProvider;
   final HighScoreRepository highScoreRepository;
   final Random _seedRandom;
   final int? debugEnemyCountOverride;
@@ -52,6 +54,10 @@ class RallyXGame extends Forge2DGame<FixedStepForge2DWorld>
   final List<FlagComponent> _activeFlags = <FlagComponent>[];
   final List<EnemyCarComponent> _activeEnemies = <EnemyCarComponent>[];
   final List<SmokeCloudComponent> _activeSmokeClouds = <SmokeCloudComponent>[];
+  int _nextPlayfieldTilesWide = GameConfig.playfieldTilesWide;
+  int _nextPlayfieldTilesHigh = GameConfig.playfieldTilesHigh;
+  double _targetVisibleTilesX = GameConfig.cameraTargetVisibleTiles.toDouble();
+  double _targetVisibleTilesY = GameConfig.cameraTargetVisibleTiles.toDouble();
 
   int currentStage = 1;
   int currentSeed;
@@ -109,16 +115,8 @@ class RallyXGame extends Forge2DGame<FixedStepForge2DWorld>
   @override
   Future<void> onLoad() async {
     await super.onLoad();
+    _refreshResponsiveLayoutTargets();
     _updateCameraZoomForViewport();
-
-    await world.add(
-      _BackdropComponent(
-        size: Vector2(
-          GameConfig.worldTilesWide.toDouble(),
-          GameConfig.worldTilesHigh.toDouble(),
-        ),
-      ),
-    );
     await world.add(_levelLayer);
 
     await _loadHighScores();
@@ -128,6 +126,7 @@ class RallyXGame extends Forge2DGame<FixedStepForge2DWorld>
   @override
   void onGameResize(Vector2 size) {
     super.onGameResize(size);
+    _refreshResponsiveLayoutTargets();
     _updateCameraZoomForViewport();
   }
 
@@ -213,8 +212,9 @@ class RallyXGame extends Forge2DGame<FixedStepForge2DWorld>
   Future<void> _loadStage() async {
     _isLoadingStage = true;
     _removeCurrentLevelComponents();
+    _refreshResponsiveLayoutTargets();
 
-    final level = levelProvider.loadLevel(
+    final level = _providerForCurrentViewport().loadLevel(
       stage: currentStage,
       seed: currentSeed,
     );
@@ -245,7 +245,12 @@ class RallyXGame extends Forge2DGame<FixedStepForge2DWorld>
   }
 
   Future<void> _addLevelToWorld(LevelData level) async {
-    final components = <Component>[];
+    final components = <Component>[
+      _BackdropComponent(
+        playfieldTilesWide: level.width,
+        playfieldTilesHigh: level.height,
+      ),
+    ];
 
     for (var y = 0; y < level.height; y++) {
       for (var x = 0; x < level.width; x++) {
@@ -386,8 +391,8 @@ class RallyXGame extends Forge2DGame<FixedStepForge2DWorld>
   }
 
   TileCoordinate worldToTile(Vector2 position) {
-    final x = position.x.floor().clamp(0, GameConfig.playfieldTilesWide - 1);
-    final y = position.y.floor().clamp(0, GameConfig.playfieldTilesHigh - 1);
+    final x = position.x.floor().clamp(0, _activePlayfieldTilesWide - 1);
+    final y = position.y.floor().clamp(0, _activePlayfieldTilesHigh - 1);
     return TileCoordinate(x, y);
   }
 
@@ -452,29 +457,26 @@ class RallyXGame extends Forge2DGame<FixedStepForge2DWorld>
   }
 
   void _updateCameraZoomForViewport() {
-    if (!hasLayout) {
+    final viewportSize = _resolveViewportSize();
+    if (viewportSize == null) {
       return;
     }
+    _refreshResponsiveLayoutTargetsForViewport(
+      viewportWidth: viewportSize.width,
+      viewportHeight: viewportSize.height,
+    );
 
-    var viewportWidth = canvasSize.x;
-    var viewportHeight = canvasSize.y;
-    if (isAttached) {
-      final boxSize = renderBox.size;
-      viewportWidth = boxSize.width;
-      viewportHeight = boxSize.height;
-    }
-    if (viewportWidth <= 0 || viewportHeight <= 0) {
-      return;
-    }
+    final viewportWidth = viewportSize.width;
+    final viewportHeight = viewportSize.height;
+    final levelWidth = _activePlayfieldTilesWide.toDouble();
+    final levelHeight = _activePlayfieldTilesHigh.toDouble();
 
-    final minZoomForWidth = viewportWidth / GameConfig.playfieldTilesWide;
-    final minZoomForHeight = viewportHeight / GameConfig.playfieldTilesHigh;
+    final minZoomForWidth = viewportWidth / levelWidth;
+    final minZoomForHeight = viewportHeight / levelHeight;
     final minZoomNoOverscan = max(minZoomForWidth, minZoomForHeight);
 
-    final rallyTargetWidthZoom =
-        viewportWidth / GameConfig.cameraTargetVisibleTiles;
-    final rallyTargetHeightZoom =
-        viewportHeight / GameConfig.cameraTargetVisibleTiles;
+    final rallyTargetWidthZoom = viewportWidth / _targetVisibleTilesX;
+    final rallyTargetHeightZoom = viewportHeight / _targetVisibleTilesY;
     final rallyTargetZoom = max(rallyTargetWidthZoom, rallyTargetHeightZoom);
 
     final targetZoom = max(
@@ -503,17 +505,19 @@ class RallyXGame extends Forge2DGame<FixedStepForge2DWorld>
     final halfWidth = visibleRect.width / 2;
     final halfHeight = visibleRect.height / 2;
 
+    final levelWidth = _activePlayfieldTilesWide.toDouble();
+    final levelHeight = _activePlayfieldTilesHigh.toDouble();
     var minX = halfWidth;
-    var maxX = GameConfig.playfieldTilesWide - halfWidth;
+    var maxX = levelWidth - halfWidth;
     var minY = halfHeight;
-    var maxY = GameConfig.playfieldTilesHigh - halfHeight;
+    var maxY = levelHeight - halfHeight;
 
     if (minX > maxX) {
-      minX = GameConfig.playfieldTilesWide / 2;
+      minX = levelWidth / 2;
       maxX = minX;
     }
     if (minY > maxY) {
-      minY = GameConfig.playfieldTilesHigh / 2;
+      minY = levelHeight / 2;
       maxY = minY;
     }
 
@@ -562,16 +566,106 @@ class RallyXGame extends Forge2DGame<FixedStepForge2DWorld>
     );
     highScores = await highScoreRepository.saveScore(entry);
   }
+
+  int get _activePlayfieldTilesWide =>
+      currentLevel?.width ?? _nextPlayfieldTilesWide;
+
+  int get _activePlayfieldTilesHigh =>
+      currentLevel?.height ?? _nextPlayfieldTilesHigh;
+
+  LevelProvider _providerForCurrentViewport() {
+    if (!_usesDefaultProceduralLevelProvider) {
+      return levelProvider;
+    }
+    return ProceduralLevelProvider(
+      width: _nextPlayfieldTilesWide,
+      height: _nextPlayfieldTilesHigh,
+    );
+  }
+
+  Size? _resolveViewportSize() {
+    if (!hasLayout) {
+      return null;
+    }
+
+    var viewportWidth = canvasSize.x;
+    var viewportHeight = canvasSize.y;
+    if (isAttached) {
+      final boxSize = renderBox.size;
+      viewportWidth = boxSize.width;
+      viewportHeight = boxSize.height;
+    }
+    if (viewportWidth <= 0 || viewportHeight <= 0) {
+      return null;
+    }
+    return Size(viewportWidth, viewportHeight);
+  }
+
+  void _refreshResponsiveLayoutTargets() {
+    final viewportSize = _resolveViewportSize();
+    if (viewportSize == null) {
+      return;
+    }
+    _refreshResponsiveLayoutTargetsForViewport(
+      viewportWidth: viewportSize.width,
+      viewportHeight: viewportSize.height,
+    );
+  }
+
+  void _refreshResponsiveLayoutTargetsForViewport({
+    required double viewportWidth,
+    required double viewportHeight,
+  }) {
+    final widthScale = max(
+      1.0,
+      viewportWidth / GameConfig.idealViewportWidthPx,
+    );
+    final heightScale = max(
+      1.0,
+      viewportHeight / GameConfig.idealViewportHeightPx,
+    );
+
+    _targetVisibleTilesX = GameConfig.cameraTargetVisibleTiles * widthScale;
+    _targetVisibleTilesY = GameConfig.cameraTargetVisibleTiles * heightScale;
+
+    _nextPlayfieldTilesWide = _snapProceduralDimension(
+      desired: (GameConfig.playfieldTilesWide * widthScale).round(),
+      minimum: GameConfig.playfieldTilesWide,
+    );
+    _nextPlayfieldTilesHigh = _snapProceduralDimension(
+      desired: (GameConfig.playfieldTilesHigh * heightScale).round(),
+      minimum: GameConfig.playfieldTilesHigh,
+    );
+  }
+
+  int _snapProceduralDimension({required int desired, required int minimum}) {
+    if (desired <= minimum) {
+      return minimum;
+    }
+
+    final step = GameConfig.proceduralDimensionStep;
+    final offset = GameConfig.proceduralDimensionOffset;
+    final cells = ((desired - offset) / step).ceil();
+    final snapped = cells * step + offset;
+    return max(minimum, snapped);
+  }
 }
 
 class _BackdropComponent extends PositionComponent {
-  _BackdropComponent({required Vector2 size}) : super(size: size);
+  _BackdropComponent({
+    required this.playfieldTilesWide,
+    required this.playfieldTilesHigh,
+  }) : super(
+         size: Vector2(
+           playfieldTilesWide.toDouble(),
+           playfieldTilesHigh.toDouble(),
+         ),
+       );
+
+  final int playfieldTilesWide;
+  final int playfieldTilesHigh;
 
   final Paint _playfieldPaint = Paint()..color = const Color(0xFF161B22);
-  final Paint _hudPaint = Paint()..color = const Color(0xFF0B0D12);
-  final Paint _hudDividerPaint = Paint()
-    ..color = const Color(0xFF3A4454)
-    ..strokeWidth = 0.08;
   final Paint _linePaint = Paint()
     ..color = const Color(0xFF2A3240)
     ..strokeWidth = 0.03;
@@ -584,40 +678,23 @@ class _BackdropComponent extends PositionComponent {
       Rect.fromLTWH(
         0,
         0,
-        GameConfig.playfieldTilesWide.toDouble(),
-        GameConfig.playfieldTilesHigh.toDouble(),
+        playfieldTilesWide.toDouble(),
+        playfieldTilesHigh.toDouble(),
       ),
       _playfieldPaint,
     );
-    canvas.drawRect(
-      Rect.fromLTWH(
-        GameConfig.playfieldTilesWide.toDouble(),
-        0,
-        GameConfig.hudTilesWide.toDouble(),
-        GameConfig.worldTilesHigh.toDouble(),
-      ),
-      _hudPaint,
-    );
-    canvas.drawLine(
-      Offset(GameConfig.playfieldTilesWide.toDouble(), 0),
-      Offset(
-        GameConfig.playfieldTilesWide.toDouble(),
-        GameConfig.playfieldTilesHigh.toDouble(),
-      ),
-      _hudDividerPaint,
-    );
 
-    for (var x = 0.0; x <= GameConfig.playfieldTilesWide; x += 1.0) {
+    for (var x = 0.0; x <= playfieldTilesWide; x += 1.0) {
       canvas.drawLine(
         Offset(x, 0),
-        Offset(x, GameConfig.playfieldTilesHigh.toDouble()),
+        Offset(x, playfieldTilesHigh.toDouble()),
         _linePaint,
       );
     }
-    for (var y = 0.0; y <= GameConfig.playfieldTilesHigh; y += 1.0) {
+    for (var y = 0.0; y <= playfieldTilesHigh; y += 1.0) {
       canvas.drawLine(
         Offset(0, y),
-        Offset(GameConfig.playfieldTilesWide.toDouble(), y),
+        Offset(playfieldTilesWide.toDouble(), y),
         _linePaint,
       );
     }
