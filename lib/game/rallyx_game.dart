@@ -14,7 +14,7 @@ import 'package:rallyx_modern/game/entities/player_car_component.dart';
 import 'package:rallyx_modern/game/entities/rock_component.dart';
 import 'package:rallyx_modern/game/entities/smoke_cloud_component.dart';
 import 'package:rallyx_modern/game/entities/wall_tile_component.dart';
-import 'package:rallyx_modern/game/input/keyboard_input_source.dart';
+import 'package:rallyx_modern/game/input/input_source.dart';
 import 'package:rallyx_modern/game/input/vehicle_command.dart';
 import 'package:rallyx_modern/game/level/level_data.dart';
 import 'package:rallyx_modern/game/level/level_provider.dart';
@@ -27,6 +27,7 @@ import 'package:rallyx_modern/game/world/fixed_step_forge2d_world.dart';
 class RallyXGame extends Forge2DGame<FixedStepForge2DWorld>
     with KeyboardEvents, HasCollisionDetection {
   RallyXGame({
+    required this.inputSource,
     LevelProvider? levelProvider,
     HighScoreRepository? highScoreRepository,
     Random? seedRandom,
@@ -46,7 +47,7 @@ class RallyXGame extends Forge2DGame<FixedStepForge2DWorld>
   final HighScoreRepository highScoreRepository;
   final Random _seedRandom;
   final int? debugEnemyCountOverride;
-  final keyboardInputSource = KeyboardInputSource();
+  final InputSource inputSource;
   final PositionComponent _levelLayer = PositionComponent();
   final List<FlagComponent> _activeFlags = <FlagComponent>[];
   final List<EnemyCarComponent> _activeEnemies = <EnemyCarComponent>[];
@@ -160,7 +161,7 @@ class RallyXGame extends Forge2DGame<FixedStepForge2DWorld>
     KeyEvent event,
     Set<LogicalKeyboardKey> keysPressed,
   ) {
-    keyboardInputSource.handleKeyEvent(event);
+    inputSource.handleKeyEvent(event);
 
     if (event is KeyDownEvent) {
       if (event.logicalKey == LogicalKeyboardKey.f3) {
@@ -195,7 +196,7 @@ class RallyXGame extends Forge2DGame<FixedStepForge2DWorld>
     survivalTime = 0;
     bonusScore = 0;
     _smokePressedLastFrame = false;
-    keyboardInputSource.clear();
+    inputSource.clear();
     await _loadStage();
   }
 
@@ -223,7 +224,7 @@ class RallyXGame extends Forge2DGame<FixedStepForge2DWorld>
     _setCameraPositionForTarget(level.playerSpawn.toWorldCenter());
 
     playerCar = PlayerCarComponent(
-      inputSource: keyboardInputSource,
+      inputSource: inputSource,
       spawnPosition: level.playerSpawn.toWorldCenter(),
     );
     await _levelLayer.add(playerCar!);

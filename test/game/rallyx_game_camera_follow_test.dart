@@ -1,6 +1,7 @@
 import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:rallyx_modern/game/input/keyboard_input_source.dart';
 import 'package:rallyx_modern/game/rallyx_game.dart';
 import 'package:rallyx_modern/game/ui/hud_overlay.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -10,7 +11,7 @@ void main() {
     WidgetTester tester,
   ) async {
     SharedPreferences.setMockInitialValues({});
-    final game = RallyXGame();
+    final game = RallyXGame(inputSource: KeyboardInputSource());
 
     await tester.pumpWidget(
       MaterialApp(

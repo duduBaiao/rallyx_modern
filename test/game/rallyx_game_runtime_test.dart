@@ -2,6 +2,7 @@ import 'package:flame/game.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:rallyx_modern/game/input/keyboard_input_source.dart';
 import 'package:rallyx_modern/game/rallyx_game.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -10,7 +11,8 @@ void main() {
     WidgetTester tester,
   ) async {
     SharedPreferences.setMockInitialValues({});
-    final game = RallyXGame();
+    final inputSource = KeyboardInputSource();
+    final game = RallyXGame(inputSource: inputSource);
 
     await tester.pumpWidget(
       MaterialApp(
@@ -40,7 +42,8 @@ void main() {
     WidgetTester tester,
   ) async {
     SharedPreferences.setMockInitialValues({});
-    final game = RallyXGame();
+    final inputSource = KeyboardInputSource();
+    final game = RallyXGame(inputSource: inputSource);
 
     await tester.pumpWidget(
       MaterialApp(
@@ -64,7 +67,8 @@ void main() {
     WidgetTester tester,
   ) async {
     SharedPreferences.setMockInitialValues({});
-    final game = RallyXGame();
+    final inputSource = KeyboardInputSource();
+    final game = RallyXGame(inputSource: inputSource);
 
     await tester.pumpWidget(
       MaterialApp(
@@ -96,7 +100,11 @@ void main() {
     WidgetTester tester,
   ) async {
     SharedPreferences.setMockInitialValues({});
-    final game = RallyXGame(debugEnemyCountOverride: 1);
+    final inputSource = KeyboardInputSource();
+    final game = RallyXGame(
+      inputSource: inputSource,
+      debugEnemyCountOverride: 1,
+    );
 
     await tester.pumpWidget(
       MaterialApp(
@@ -117,7 +125,8 @@ void main() {
     WidgetTester tester,
   ) async {
     SharedPreferences.setMockInitialValues({});
-    final game = RallyXGame();
+    final inputSource = KeyboardInputSource();
+    final game = RallyXGame(inputSource: inputSource);
 
     await tester.pumpWidget(
       MaterialApp(
@@ -130,7 +139,7 @@ void main() {
     expect(player, isNotNull);
     final initialAngle = player!.body.angle;
 
-    game.keyboardInputSource.handleKeyEvent(
+    inputSource.handleKeyEvent(
       const KeyDownEvent(
         physicalKey: PhysicalKeyboardKey.arrowLeft,
         logicalKey: LogicalKeyboardKey.arrowLeft,
@@ -142,14 +151,15 @@ void main() {
     final stoppedAngleDelta = (player.body.angle - initialAngle).abs();
     expect(stoppedAngleDelta, lessThan(0.02));
 
-    game.keyboardInputSource.clear();
+    inputSource.clear();
   });
 
   testWidgets('player speed is capped at tuned lower top speed', (
     WidgetTester tester,
   ) async {
     SharedPreferences.setMockInitialValues({});
-    final game = RallyXGame();
+    final inputSource = KeyboardInputSource();
+    final game = RallyXGame(inputSource: inputSource);
 
     await tester.pumpWidget(
       MaterialApp(
@@ -158,7 +168,7 @@ void main() {
     );
     await tester.pump(const Duration(milliseconds: 700));
 
-    game.keyboardInputSource.handleKeyEvent(
+    inputSource.handleKeyEvent(
       const KeyDownEvent(
         physicalKey: PhysicalKeyboardKey.arrowUp,
         logicalKey: LogicalKeyboardKey.arrowUp,
@@ -170,6 +180,6 @@ void main() {
     expect(game.playerCar, isNotNull);
     expect(game.playerCar!.speed, lessThanOrEqualTo(4.3));
 
-    game.keyboardInputSource.clear();
+    inputSource.clear();
   });
 }
