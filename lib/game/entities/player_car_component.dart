@@ -54,6 +54,13 @@ class PlayerCarComponent extends BodyComponent<RallyXGame> {
   VehicleCommand get lastCommand => _lastCommand;
   double get speed => body.linearVelocity.length;
 
+  static double steeringForTravelDirection({
+    required double steeringInput,
+    required double signedForwardSpeed,
+  }) {
+    return signedForwardSpeed >= 0 ? steeringInput : -steeringInput;
+  }
+
   final Paint _bodyPaint = Paint()..color = const Color(0xFF2B8CFF);
   final Paint _roofPaint = Paint()..color = const Color(0xFF1259AA);
   final Paint _windshieldPaint = Paint()..color = const Color(0xFF99D8FF);
@@ -129,17 +136,21 @@ class PlayerCarComponent extends BodyComponent<RallyXGame> {
   }
 
   void _applySteering(VehicleCommand command) {
-    final speed = body.linearVelocity.length;
+    final forward = _forwardVector();
+    final signedForwardSpeed = body.linearVelocity.dot(forward);
+    final speed = signedForwardSpeed.abs();
     if (speed < _minSteerSpeed) {
       body.angularVelocity = 0;
       return;
     }
 
-    final speedRatio = (body.linearVelocity.length / _maxForwardSpeed).clamp(
-      0.45,
-      1.0,
+    final speedRatio = (speed / _maxForwardSpeed).clamp(0.45, 1.0);
+    final steeringDirection = steeringForTravelDirection(
+      steeringInput: command.steering,
+      signedForwardSpeed: signedForwardSpeed,
     );
-    final targetAngularVelocity = command.steering * _maxSteerRate * speedRatio;
+    final targetAngularVelocity =
+        steeringDirection * _maxSteerRate * speedRatio;
     final angularVelocityDelta = targetAngularVelocity - body.angularVelocity;
     final torque = angularVelocityDelta * body.getInertia() * _steerResponse;
     body.applyTorque(torque);
