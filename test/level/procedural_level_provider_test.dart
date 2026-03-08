@@ -64,6 +64,70 @@ void main() {
         }
       }
     });
+
+    test('player starts in lower-left-biased zone', () {
+      final provider = ProceduralLevelProvider();
+
+      for (var stage = 1; stage <= 4; stage++) {
+        for (var seed = 2100; seed < 2120; seed++) {
+          final level = provider.loadLevel(stage: stage, seed: seed);
+          expect(level.playerSpawn.x, lessThan(level.width * 0.55));
+          expect(level.playerSpawn.y, greaterThan(level.height * 0.52));
+        }
+      }
+    });
+
+    test('enemy spawns stay far from player and tend to upper area', () {
+      final provider = ProceduralLevelProvider();
+
+      for (var stage = 1; stage <= 4; stage++) {
+        for (var seed = 2200; seed < 2220; seed++) {
+          final level = provider.loadLevel(stage: stage, seed: seed);
+          final minDistanceToPlayer = level.enemySpawns
+              .map((enemy) => enemy.manhattanDistanceTo(level.playerSpawn))
+              .reduce((a, b) => a < b ? a : b);
+          expect(minDistanceToPlayer, greaterThanOrEqualTo(12));
+
+          var minEnemyPairDistance = 1 << 30;
+          for (var i = 0; i < level.enemySpawns.length; i++) {
+            for (var j = i + 1; j < level.enemySpawns.length; j++) {
+              final distance = level.enemySpawns[i].manhattanDistanceTo(
+                level.enemySpawns[j],
+              );
+              if (distance < minEnemyPairDistance) {
+                minEnemyPairDistance = distance;
+              }
+            }
+          }
+          expect(minEnemyPairDistance, greaterThanOrEqualTo(4));
+
+          final upperHalfEnemies = level.enemySpawns
+              .where((enemy) => enemy.y < level.height / 2)
+              .length;
+          expect(upperHalfEnemies, greaterThanOrEqualTo(2));
+        }
+      }
+    });
+
+    test('flags are distributed across at least three quadrants', () {
+      final provider = ProceduralLevelProvider();
+
+      for (var stage = 1; stage <= 4; stage++) {
+        for (var seed = 2300; seed < 2320; seed++) {
+          final level = provider.loadLevel(stage: stage, seed: seed);
+          final quadrants = level.flags
+              .map(
+                (flag) => _quadrantIndex(
+                  tile: flag.tile,
+                  width: level.width,
+                  height: level.height,
+                ),
+              )
+              .toSet();
+          expect(quadrants.length, greaterThanOrEqualTo(3));
+        }
+      }
+    });
   });
 }
 
@@ -77,4 +141,23 @@ int _tileCounts(LevelData level, TileKind kind) {
     }
   }
   return count;
+}
+
+int _quadrantIndex({
+  required TileCoordinate tile,
+  required int width,
+  required int height,
+}) {
+  final east = tile.x >= width ~/ 2;
+  final south = tile.y >= height ~/ 2;
+  if (!east && !south) {
+    return 0;
+  }
+  if (east && !south) {
+    return 1;
+  }
+  if (!east && south) {
+    return 2;
+  }
+  return 3;
 }

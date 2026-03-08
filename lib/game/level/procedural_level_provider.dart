@@ -55,7 +55,10 @@ class ProceduralLevelProvider implements LevelProvider {
         continue;
       }
 
-      final enemySpawns = _pickEnemySpawns(reachable, playerSpawn);
+      final enemySpawns = _pickEnemySpawns(
+        reachable: reachable,
+        playerSpawn: playerSpawn,
+      );
       if (enemySpawns.length < GameConfig.enemySpawnCount) {
         continue;
       }
@@ -194,36 +197,23 @@ class ProceduralLevelProvider implements LevelProvider {
   }
 
   TileCoordinate _pickPlayerSpawn(List<TileCoordinate> roads, Random random) {
-    final mapCenter = TileCoordinate(width ~/ 2, height ~/ 2);
-
-    List<TileCoordinate> pickCandidates(int margin) => roads
-        .where(
-          (tile) =>
-              tile.x >= margin &&
-              tile.y >= margin &&
-              tile.x < width - margin &&
-              tile.y < height - margin,
-        )
-        .toList();
-
-    var candidates = pickCandidates(6);
-    if (candidates.isEmpty) {
-      candidates = pickCandidates(4);
-    }
-    if (candidates.isEmpty) {
-      candidates = pickCandidates(2);
-    }
-    if (candidates.isEmpty) {
-      candidates = List<TileCoordinate>.from(roads);
-    }
-
-    candidates.sort(
-      (a, b) => a
-          .manhattanDistanceTo(mapCenter)
-          .compareTo(b.manhattanDistanceTo(mapCenter)),
+    final target = _normalizedTile(0.20, 0.84);
+    final strictZone = roads.where(
+      (tile) => _isInNormalizedZone(tile, minX: 0.08, maxX: 0.35, minY: 0.64),
     );
-    final centerPoolSize = min(24, candidates.length);
-    return candidates[random.nextInt(centerPoolSize)];
+    final relaxedZone = roads.where(
+      (tile) => _isInNormalizedZone(tile, minX: 0.05, maxX: 0.50, minY: 0.56),
+    );
+
+    final candidates = strictZone.isNotEmpty
+        ? strictZone.toList()
+        : (relaxedZone.isNotEmpty ? relaxedZone.toList() : roads);
+    return _pickNearAnchorWithVariance(
+      candidates: candidates,
+      anchor: target,
+      random: random,
+      poolSize: 20,
+    );
   }
 
   void _placeRocks(
@@ -255,39 +245,65 @@ class ProceduralLevelProvider implements LevelProvider {
     }
   }
 
-  List<TileCoordinate> _pickEnemySpawns(
-    List<TileCoordinate> reachable,
-    TileCoordinate playerSpawn,
-  ) {
-    final candidates = [...reachable]
-      ..remove(playerSpawn)
+  List<TileCoordinate> _pickEnemySpawns({
+    required List<TileCoordinate> reachable,
+    required TileCoordinate playerSpawn,
+  }) {
+    final garageAnchor = _normalizedTile(0.50, 0.18);
+    final minPlayerDistance = max(14, min(width, height) ~/ 4);
+
+    bool farEnoughFromPlayer(TileCoordinate tile) =>
+        tile.manhattanDistanceTo(playerSpawn) >= minPlayerDistance;
+
+    final strictGarage = reachable
+        .where(
+          (tile) =>
+              tile != playerSpawn &&
+              farEnoughFromPlayer(tile) &&
+              _isInNormalizedZone(
+                tile,
+                minX: 0.38,
+                maxX: 0.62,
+                minY: 0.06,
+                maxY: 0.33,
+              ),
+        )
+        .toList();
+    final relaxedGarage = reachable
+        .where(
+          (tile) =>
+              tile != playerSpawn &&
+              tile.manhattanDistanceTo(playerSpawn) >= minPlayerDistance - 4 &&
+              _isInNormalizedZone(
+                tile,
+                minX: 0.28,
+                maxX: 0.72,
+                minY: 0.04,
+                maxY: 0.45,
+              ),
+        )
+        .toList();
+    final fallbackFar = reachable.where((tile) => tile != playerSpawn).toList()
       ..sort(
         (a, b) => b
             .manhattanDistanceTo(playerSpawn)
             .compareTo(a.manhattanDistanceTo(playerSpawn)),
       );
 
-    final selected = <TileCoordinate>[];
-    for (final tile in candidates) {
-      final tooCloseToSelected = selected.any(
-        (other) => other.manhattanDistanceTo(tile) < 4,
-      );
-      if (!tooCloseToSelected) {
-        selected.add(tile);
-      }
-      if (selected.length == GameConfig.enemySpawnCount) {
-        return selected;
-      }
-    }
+    final orderedCandidates = _mergeUniqueInOrder([
+      _sortByDistanceToAnchor(strictGarage, garageAnchor),
+      _sortByDistanceToAnchor(relaxedGarage, garageAnchor),
+      fallbackFar,
+    ]);
 
-    for (final tile in candidates) {
-      if (selected.length == GameConfig.enemySpawnCount) {
-        break;
-      }
-      if (!selected.contains(tile)) {
-        selected.add(tile);
-      }
-    }
+    final selected = _pickDistributedEnemySpawns(
+      candidates: orderedCandidates,
+      desiredCount: GameConfig.enemySpawnCount,
+      playerSpawn: playerSpawn,
+      anchor: garageAnchor,
+      initialMinSpacing: 7,
+      minimumMinSpacing: 4,
+    );
     return selected;
   }
 
@@ -298,40 +314,84 @@ class ProceduralLevelProvider implements LevelProvider {
     required Random random,
   }) {
     final blocked = <TileCoordinate>{playerSpawn, ...enemySpawns};
-    final candidates = reachable
+    final allCandidates = reachable
         .where((tile) => !blocked.contains(tile))
         .toList();
-    if (candidates.length < GameConfig.flagsPerStage) {
+    if (allCandidates.length < GameConfig.flagsPerStage) {
       return const [];
     }
 
-    candidates.shuffle(random);
-    candidates.sort(
-      (a, b) => b
-          .manhattanDistanceTo(playerSpawn)
-          .compareTo(a.manhattanDistanceTo(playerSpawn)),
-    );
+    final preferredCandidates = allCandidates.where((tile) {
+      final distanceFromPlayer = tile.manhattanDistanceTo(playerSpawn);
+      final nearestEnemyDistance = _minDistanceToAny(tile, enemySpawns);
+      return distanceFromPlayer >= 6 && nearestEnemyDistance >= 3;
+    }).toList();
+    final candidates = preferredCandidates.length >= GameConfig.flagsPerStage
+        ? preferredCandidates
+        : allCandidates;
 
     final selected = <TileCoordinate>[];
+    final byQuadrant = <int, List<TileCoordinate>>{
+      0: <TileCoordinate>[],
+      1: <TileCoordinate>[],
+      2: <TileCoordinate>[],
+      3: <TileCoordinate>[],
+    };
     for (final tile in candidates) {
-      final tooClose = selected.any(
-        (other) => other.manhattanDistanceTo(tile) < 3,
+      byQuadrant[_quadrantIndex(tile)]!.add(tile);
+    }
+
+    for (var quadrant = 0; quadrant < 4; quadrant++) {
+      final quadrantCandidates = byQuadrant[quadrant]!;
+      final quadrantCenter = _quadrantCenter(quadrant);
+      quadrantCandidates.sort((a, b) {
+        final playerDistanceComparison = b
+            .manhattanDistanceTo(playerSpawn)
+            .compareTo(a.manhattanDistanceTo(playerSpawn));
+        if (playerDistanceComparison != 0) {
+          return playerDistanceComparison;
+        }
+        return a
+            .manhattanDistanceTo(quadrantCenter)
+            .compareTo(b.manhattanDistanceTo(quadrantCenter));
+      });
+
+      final selectedCandidate = quadrantCandidates.firstWhere(
+        (tile) =>
+            _isFarEnoughFromSet(tile, selected, 5) &&
+            _isFarEnoughFromSet(tile, enemySpawns, 3),
+        orElse: () => const TileCoordinate(-1, -1),
       );
-      if (!tooClose) {
-        selected.add(tile);
-      }
-      if (selected.length == GameConfig.flagsPerStage) {
-        break;
+      if (selectedCandidate.x >= 0) {
+        selected.add(selectedCandidate);
       }
     }
 
+    final remaining = candidates.where((tile) => !selected.contains(tile));
+    while (selected.length < GameConfig.flagsPerStage) {
+      final next = _pickBestSpreadCandidate(
+        candidates: remaining,
+        selected: selected,
+        playerSpawn: playerSpawn,
+      );
+      if (next == null) {
+        break;
+      }
+      selected.add(next);
+    }
+
     if (selected.length < GameConfig.flagsPerStage) {
-      for (final tile in candidates) {
+      final fallback =
+          allCandidates.where((tile) => !selected.contains(tile)).toList()
+            ..sort(
+              (a, b) => b
+                  .manhattanDistanceTo(playerSpawn)
+                  .compareTo(a.manhattanDistanceTo(playerSpawn)),
+            );
+      for (final tile in fallback) {
+        selected.add(tile);
         if (selected.length == GameConfig.flagsPerStage) {
           break;
-        }
-        if (!selected.contains(tile)) {
-          selected.add(tile);
         }
       }
     }
@@ -350,6 +410,219 @@ class ProceduralLevelProvider implements LevelProvider {
     return selected
         .map((tile) => FlagSpawn(tile: tile, isSpecial: tile == specialTile))
         .toList(growable: false);
+  }
+
+  TileCoordinate _normalizedTile(double nx, double ny) {
+    final x = (width * nx).round().clamp(1, width - 2);
+    final y = (height * ny).round().clamp(1, height - 2);
+    return TileCoordinate(x, y);
+  }
+
+  bool _isInNormalizedZone(
+    TileCoordinate tile, {
+    required double minX,
+    double maxX = 1.0,
+    required double minY,
+    double maxY = 1.0,
+  }) {
+    final x = (tile.x + 0.5) / width;
+    final y = (tile.y + 0.5) / height;
+    return x >= minX && x <= maxX && y >= minY && y <= maxY;
+  }
+
+  TileCoordinate _pickNearAnchorWithVariance({
+    required List<TileCoordinate> candidates,
+    required TileCoordinate anchor,
+    required Random random,
+    int poolSize = 16,
+  }) {
+    final ordered = _sortByDistanceToAnchor(candidates, anchor);
+    final pool = min(poolSize, ordered.length);
+    return ordered[random.nextInt(pool)];
+  }
+
+  List<TileCoordinate> _sortByDistanceToAnchor(
+    List<TileCoordinate> tiles,
+    TileCoordinate anchor,
+  ) {
+    final sorted = List<TileCoordinate>.from(tiles);
+    sorted.sort(
+      (a, b) => a
+          .manhattanDistanceTo(anchor)
+          .compareTo(b.manhattanDistanceTo(anchor)),
+    );
+    return sorted;
+  }
+
+  List<TileCoordinate> _mergeUniqueInOrder(List<List<TileCoordinate>> groups) {
+    final merged = <TileCoordinate>[];
+    final seen = <TileCoordinate>{};
+    for (final group in groups) {
+      for (final tile in group) {
+        if (seen.add(tile)) {
+          merged.add(tile);
+        }
+      }
+    }
+    return merged;
+  }
+
+  List<TileCoordinate> _pickDistributedEnemySpawns({
+    required List<TileCoordinate> candidates,
+    required int desiredCount,
+    required TileCoordinate playerSpawn,
+    required TileCoordinate anchor,
+    required int initialMinSpacing,
+    required int minimumMinSpacing,
+  }) {
+    if (candidates.isEmpty || desiredCount <= 0) {
+      return const [];
+    }
+
+    final selected = <TileCoordinate>[];
+    selected.add(candidates.first);
+
+    var spacing = initialMinSpacing;
+    while (selected.length < desiredCount) {
+      TileCoordinate? best;
+      var bestScore = -1;
+
+      for (final tile in candidates) {
+        if (selected.contains(tile)) {
+          continue;
+        }
+        final spreadDistance = _minDistanceToAny(tile, selected);
+        if (spreadDistance < spacing) {
+          continue;
+        }
+        final distanceFromPlayer = tile.manhattanDistanceTo(playerSpawn);
+        final distanceToAnchor = tile.manhattanDistanceTo(anchor);
+        final score =
+            spreadDistance * 100 + distanceFromPlayer * 3 - distanceToAnchor;
+        if (score > bestScore) {
+          bestScore = score;
+          best = tile;
+        }
+      }
+
+      if (best != null) {
+        selected.add(best);
+        continue;
+      }
+      if (spacing > minimumMinSpacing) {
+        spacing--;
+        continue;
+      }
+      break;
+    }
+
+    while (selected.length < desiredCount) {
+      TileCoordinate? best;
+      var bestScore = -1;
+      for (final tile in candidates) {
+        if (selected.contains(tile)) {
+          continue;
+        }
+        final spreadDistance = _minDistanceToAny(tile, selected);
+        final distanceFromPlayer = tile.manhattanDistanceTo(playerSpawn);
+        final score = spreadDistance * 100 + distanceFromPlayer * 2;
+        if (score > bestScore) {
+          bestScore = score;
+          best = tile;
+        }
+      }
+      if (best == null) {
+        break;
+      }
+      selected.add(best);
+    }
+
+    if (selected.length < desiredCount) {
+      for (final tile in candidates) {
+        if (selected.contains(tile)) {
+          continue;
+        }
+        selected.add(tile);
+        if (selected.length >= desiredCount) {
+          break;
+        }
+      }
+    }
+    return selected;
+  }
+
+  int _quadrantIndex(TileCoordinate tile) {
+    final east = tile.x >= width ~/ 2;
+    final south = tile.y >= height ~/ 2;
+    if (!east && !south) {
+      return 0;
+    }
+    if (east && !south) {
+      return 1;
+    }
+    if (!east && south) {
+      return 2;
+    }
+    return 3;
+  }
+
+  TileCoordinate _quadrantCenter(int quadrant) {
+    final quarterX = width ~/ 4;
+    final threeQuarterX = (width * 3) ~/ 4;
+    final quarterY = height ~/ 4;
+    final threeQuarterY = (height * 3) ~/ 4;
+
+    return switch (quadrant) {
+      0 => TileCoordinate(quarterX, quarterY),
+      1 => TileCoordinate(threeQuarterX, quarterY),
+      2 => TileCoordinate(quarterX, threeQuarterY),
+      _ => TileCoordinate(threeQuarterX, threeQuarterY),
+    };
+  }
+
+  bool _isFarEnoughFromSet(
+    TileCoordinate tile,
+    Iterable<TileCoordinate> others,
+    int minDistance,
+  ) {
+    for (final other in others) {
+      if (tile.manhattanDistanceTo(other) < minDistance) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  int _minDistanceToAny(TileCoordinate tile, Iterable<TileCoordinate> others) {
+    var distance = 1 << 30;
+    for (final other in others) {
+      distance = min(distance, tile.manhattanDistanceTo(other));
+    }
+    return distance == (1 << 30) ? 0 : distance;
+  }
+
+  TileCoordinate? _pickBestSpreadCandidate({
+    required Iterable<TileCoordinate> candidates,
+    required List<TileCoordinate> selected,
+    required TileCoordinate playerSpawn,
+  }) {
+    TileCoordinate? best;
+    var bestScore = -1;
+    for (final candidate in candidates) {
+      final distanceFromPlayer = candidate.manhattanDistanceTo(playerSpawn);
+      final spreadDistance = selected.isEmpty
+          ? distanceFromPlayer
+          : _minDistanceToAny(candidate, selected);
+      final score = spreadDistance * 3 + distanceFromPlayer;
+      if (spreadDistance < 3 && selected.isNotEmpty) {
+        continue;
+      }
+      if (score > bestScore) {
+        bestScore = score;
+        best = candidate;
+      }
+    }
+    return best;
   }
 
   int _mazeStep() => corridorWidth + wallThickness;
