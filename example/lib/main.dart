@@ -34,7 +34,7 @@ class RallyXApp extends StatelessWidget {
                   initialActiveOverlays: const [GameOverOverlay.id],
                 ),
               ),
-              Expanded(flex: 2, child: HudOverlay(game: game)),
+              Expanded(flex: 4, child: HudOverlay(game: game)),
             ],
           ),
         ),

@@ -2,28 +2,38 @@ import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flame_forge2d/flame_forge2d.dart';
+import 'package:rallyx_modern/game/ai/enemy_command_brain.dart';
+import 'package:rallyx_modern/game/ai/enemy_nav_planner.dart';
+import 'package:rallyx_modern/game/ai/vehicle_dynamics.dart';
 import 'package:rallyx_modern/game/level/level_data.dart';
 import 'package:rallyx_modern/game/rallyx_game.dart';
 
 class EnemyCarComponent extends BodyComponent<RallyXGame> {
-  EnemyCarComponent({required this.spawnTile, required this.stage})
-    : super(
-        renderBody: false,
-        bodyDef: BodyDef(
-          type: BodyType.dynamic,
-          position: spawnTile.toWorldCenter(),
-          linearDamping: 1.4,
-          angularDamping: 6.0,
-        ),
-        fixtureDefs: [
-          FixtureDef(
-            PolygonShape()..setAsBoxXY(_halfLength, _halfWidth),
-            density: 0.9,
-            friction: 0.2,
-            restitution: 0.0,
-          ),
-        ],
-      );
+  EnemyCarComponent({
+    required this.spawnTile,
+    required this.stage,
+    required this.navPlanner,
+  }) : _dynamicsController = VehicleDynamicsController(
+         tuning: _enemyDynamicsTuningForStage(stage),
+       ),
+       _brain = EnemyCommandBrain(config: _brainConfigForStage(stage)),
+       super(
+         renderBody: false,
+         bodyDef: BodyDef(
+           type: BodyType.dynamic,
+           position: spawnTile.toWorldCenter(),
+           linearDamping: 1.4,
+           angularDamping: 6.0,
+         ),
+         fixtureDefs: [
+           FixtureDef(
+             PolygonShape()..setAsBoxXY(_halfLength, _halfWidth),
+             density: 0.9,
+             friction: 0.2,
+             restitution: 0.0,
+           ),
+         ],
+       );
 
   static const double _carLength = 1.25;
   static const double _carWidth = 0.72;
@@ -32,15 +42,17 @@ class EnemyCarComponent extends BodyComponent<RallyXGame> {
 
   final TileCoordinate spawnTile;
   final int stage;
+  final EnemyNavPlanner navPlanner;
+  final VehicleDynamicsController _dynamicsController;
+  final VehicleDynamicsRuntimeState _dynamicsRuntimeState =
+      VehicleDynamicsRuntimeState();
+  final EnemyCommandBrain _brain;
 
   double _stunTimer = 0;
-  double _pathTimer = 0;
-  TileCoordinate? _waypointTile;
+  double _routeReplanTimer = 0;
+  bool _headingInitialized = false;
 
   double get stunRemaining => _stunTimer;
-
-  double get _engineForce => 58 + stage * 4.5;
-  double get _maxSpeed => 9.5 + stage * 0.5;
 
   final Paint _bodyPaint = Paint()..color = const Color(0xFFE05656);
   final Paint _roofPaint = Paint()..color = const Color(0xFFA73B3B);
@@ -55,7 +67,16 @@ class EnemyCarComponent extends BodyComponent<RallyXGame> {
       return;
     }
 
-    _applyLateralFriction();
+    if (!_headingInitialized) {
+      final player = game.playerCar;
+      if (player != null) {
+        final toPlayer = player.body.position - body.position;
+        if (toPlayer.length2 > 0.0001) {
+          body.setTransform(body.position, math.atan2(toPlayer.y, toPlayer.x));
+        }
+        _headingInitialized = true;
+      }
+    }
 
     if (_stunTimer > 0) {
       _stunTimer -= dt;
@@ -64,20 +85,26 @@ class EnemyCarComponent extends BodyComponent<RallyXGame> {
       return;
     }
 
-    _pathTimer -= dt;
-    if (_pathTimer <= 0) {
-      _pathTimer = 0.22;
-      _waypointTile = game.nextTileTowardsPlayer(
-        game.worldToTile(body.position),
-      );
+    _routeReplanTimer -= dt;
+    if (_routeReplanTimer <= 0) {
+      _routeReplanTimer = 0.5;
+      _replanRoute();
     }
 
-    final target =
-        _waypointTile?.toWorldCenter() ?? game.playerCar?.body.position;
-    if (target == null) {
-      return;
-    }
-    _driveToward(target);
+    final bodyState = _dynamicsController.captureBodyState(body);
+    final command = _brain.nextCommand(
+      position: body.position.clone(),
+      headingAngle: body.angle,
+      signedForwardSpeed: bodyState.signedForwardSpeed,
+      dt: dt,
+      isBlockedWorldPosition: _isBlockedWorldPosition,
+    );
+    _dynamicsController.apply(
+      body: body,
+      command: command,
+      dt: dt,
+      runtimeState: _dynamicsRuntimeState,
+    );
   }
 
   @override
@@ -106,42 +133,97 @@ class EnemyCarComponent extends BodyComponent<RallyXGame> {
     _stunTimer = math.max(_stunTimer, seconds);
   }
 
-  void _driveToward(Vector2 target) {
-    final toTarget = target - body.position;
-    if (toTarget.length2 < 0.0001) {
+  void _replanRoute() {
+    final player = game.playerCar;
+    if (player == null) {
       return;
     }
-
-    final desiredAngle = math.atan2(toTarget.y, toTarget.x);
-    final angleDelta = _normalizeAngle(desiredAngle - body.angle);
-    final torque = angleDelta * body.getInertia() * 8.0;
-    body.applyTorque(torque);
-
-    final forward = Vector2(math.cos(body.angle), math.sin(body.angle));
-    body.applyForce(forward * _engineForce);
-
-    final velocity = body.linearVelocity;
-    final speed = velocity.length;
-    if (speed > _maxSpeed) {
-      body.linearVelocity = velocity.normalized() * _maxSpeed;
+    final from = game.worldToTile(body.position);
+    final to = game.worldToTile(player.body.position);
+    final route = navPlanner.planRoute(from: from, to: to);
+    if (route == null || route.waypointTiles.isEmpty) {
+      _brain.setRoute([player.body.position.clone()]);
+      return;
     }
+    final pathPoints = route.pathWorldPositions(skipFirst: true);
+    if (pathPoints.isEmpty) {
+      _brain.setRoute([player.body.position.clone()]);
+      return;
+    }
+    _brain.setRoute(pathPoints);
   }
 
-  void _applyLateralFriction() {
-    final forward = Vector2(math.cos(body.angle), math.sin(body.angle));
-    final right = Vector2(-forward.y, forward.x);
-    final lateralSpeed = body.linearVelocity.dot(right);
-    final impulse = right * (-lateralSpeed * body.mass * 0.92);
-    body.applyLinearImpulse(impulse);
+  bool _isBlockedWorldPosition(Vector2 worldPosition) {
+    final level = game.currentLevel;
+    if (level == null) {
+      return false;
+    }
+    final tileX = worldPosition.x.floor();
+    final tileY = worldPosition.y.floor();
+    if (!level.isInside(tileX, tileY)) {
+      return true;
+    }
+    return !level.isWalkable(tileX, tileY);
   }
 
-  double _normalizeAngle(double angle) {
-    while (angle > math.pi) {
-      angle -= 2 * math.pi;
-    }
-    while (angle < -math.pi) {
-      angle += 2 * math.pi;
-    }
-    return angle;
+  static VehicleDynamicsTuning _enemyDynamicsTuningForStage(int stage) {
+    return VehicleDynamicsTuning(
+      engineForce: 46 + stage * 4.0,
+      brakeForce: 120,
+      reverseForce: 42,
+      coastDrag: 10,
+      reverseThreshold: 0.35,
+      maxForwardSpeed: 3.7 + stage * 0.42,
+      maxReverseSpeed: 1.75,
+      minSteerSpeed: 0.45,
+      lowSpeedSteerFactor: 0.72,
+      maxSteerRate: 13.824, // 10% down from 3x player steer rate
+      steerResponse: 22, // avoid over-correction while keeping sharp turn cap
+      lateralGrip: 0.9,
+      angularDampingFactor: 0.95,
+      wallSlideAssistForce: 34,
+      wallSlideAssistForwardSpeedThreshold: 0.7,
+      wallSlideAssistSteeringThreshold: 0.26,
+      wallSlideAssistDelaySeconds: 0.08,
+      stuckTurnAssistMinAngularVelocity: 1.4,
+      stuckTurnAssistTorqueBoost: 30,
+    );
+  }
+
+  static EnemyCommandBrainConfig _brainConfigForStage(int stage) {
+    return EnemyCommandBrainConfig(
+      maxCruiseSpeed: 3.9 + stage * 0.45,
+      minTurnSpeed: 1.05 + stage * 0.06,
+      lookaheadDistance: 2.0,
+      minLookaheadDistance: 0.95,
+      turnLookaheadReduction: 0.72,
+      cornerCommitDistance: 0.95,
+      cornerDotThreshold: 0.45,
+      waypointReachDistance: 0.55,
+      headingForFullSteer: 1.6,
+      sharpTurnHeading: 1.0,
+      speedHysteresis: 0.18,
+      cruiseThrottle: 0.60,
+      brakeWhenOverspeed: 0.55,
+      stuckSpeedThreshold: 0.30,
+      stuckProgressDistance: 0.12,
+      stuckWindowSeconds: 0.75,
+      escapeDurationSeconds: 0.80,
+      escapeThrottle: 1.0,
+      escapeSteering: 1.0,
+      postEscapeCooldownSeconds: 0.20,
+      obstacleProbeNearDistance: 1.0,
+      obstacleProbeMidDistance: 1.8,
+      obstacleProbeFarDistance: 2.6,
+      obstacleProbeLateralOffset: 0.6,
+      obstacleAvoidanceSteeringGain: 0.7,
+      obstacleMaxSteeringBias: 0.63,
+      obstacleImmediateTurnStrength: 1.0,
+      obstacleSlowdownThreshold: 0.2,
+      obstacleThrottleReduction: 0.7,
+      obstacleBrakeStrength: 0.45,
+      obstacleNearBlockMinThrottle: 0.42,
+      obstacleNearBlockMaxBrake: 0.35,
+    );
   }
 }

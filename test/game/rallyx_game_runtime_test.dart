@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rallyx_modern/game/config/game_config.dart';
 import 'package:rallyx_modern/game/input/keyboard_input_source.dart';
+import 'package:rallyx_modern/game/level/level_data.dart';
+import 'package:rallyx_modern/game/level/level_provider.dart';
 import 'package:rallyx_modern/game/rallyx_game.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -152,6 +154,50 @@ void main() {
     expect(game.currentEnemySpawnCount, 4);
   });
 
+  testWidgets('mounted enemies are not pruned during runtime updates', (
+    WidgetTester tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final inputSource = KeyboardInputSource();
+    final game = RallyXGame(inputSource: inputSource);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: GameWidget<RallyXGame>(game: game)),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 700));
+
+    expect(game.currentStage, 1);
+    expect(game.currentEnemySpawnCount, 2);
+
+    await tester.pump(const Duration(seconds: 2));
+    expect(game.currentStage, 1);
+    expect(game.currentEnemySpawnCount, 2);
+  });
+
+  testWidgets('fills missing enemy spawns when provider returns one spawn', (
+    WidgetTester tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final inputSource = KeyboardInputSource();
+    final game = RallyXGame(
+      inputSource: inputSource,
+      levelProvider: _SingleSpawnLevelProvider(baseLevel: _buildOpenLevel()),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: GameWidget<RallyXGame>(game: game)),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 700));
+
+    expect(game.currentStage, 1);
+    expect(game.currentEnemySpawnCount, 2);
+    expect(game.debugActiveEnemies.length, 2);
+  });
+
   testWidgets('debug enemy override forces active enemy count', (
     WidgetTester tester,
   ) async {
@@ -238,4 +284,48 @@ void main() {
 
     inputSource.clear();
   });
+}
+
+class _SingleSpawnLevelProvider implements LevelProvider {
+  const _SingleSpawnLevelProvider({required this.baseLevel});
+
+  final LevelData baseLevel;
+
+  @override
+  LevelData loadLevel({required int stage, required int seed}) {
+    return LevelData(
+      stage: stage,
+      seed: seed,
+      width: baseLevel.width,
+      height: baseLevel.height,
+      tiles: baseLevel.tiles
+          .map((row) => List<TileKind>.from(row, growable: false))
+          .toList(growable: false),
+      playerSpawn: baseLevel.playerSpawn,
+      enemySpawns: baseLevel.enemySpawns,
+      flags: baseLevel.flags,
+    );
+  }
+}
+
+LevelData _buildOpenLevel() {
+  const width = 41;
+  const height = 41;
+  final tiles = List<List<TileKind>>.generate(height, (y) {
+    return List<TileKind>.generate(width, (x) {
+      final border = x == 0 || y == 0 || x == width - 1 || y == height - 1;
+      return border ? TileKind.wall : TileKind.road;
+    });
+  });
+
+  return LevelData(
+    stage: 1,
+    seed: 0,
+    width: width,
+    height: height,
+    tiles: tiles,
+    playerSpawn: const TileCoordinate(5, 35),
+    enemySpawns: const [TileCoordinate(35, 5)],
+    flags: const [],
+  );
 }

@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:collection';
 import 'dart:math';
 
 import 'package:flame/components.dart';
@@ -14,6 +13,7 @@ import 'package:rallyx_modern/game/entities/player_car_component.dart';
 import 'package:rallyx_modern/game/entities/rock_component.dart';
 import 'package:rallyx_modern/game/entities/smoke_cloud_component.dart';
 import 'package:rallyx_modern/game/entities/wall_tile_component.dart';
+import 'package:rallyx_modern/game/ai/enemy_nav_planner.dart';
 import 'package:rallyx_modern/game/input/input_source.dart';
 import 'package:rallyx_modern/game/input/vehicle_command.dart';
 import 'package:rallyx_modern/game/level/level_data.dart';
@@ -54,6 +54,7 @@ class RallyXGame extends Forge2DGame<FixedStepForge2DWorld>
   final List<FlagComponent> _activeFlags = <FlagComponent>[];
   final List<EnemyCarComponent> _activeEnemies = <EnemyCarComponent>[];
   final List<SmokeCloudComponent> _activeSmokeClouds = <SmokeCloudComponent>[];
+  EnemyNavPlanner? _enemyNavPlanner;
   int _nextPlayfieldTilesWide = GameConfig.playfieldTilesWide;
   int _nextPlayfieldTilesHigh = GameConfig.playfieldTilesHigh;
   double _targetVisibleTilesX = GameConfig.cameraTargetVisibleTiles.toDouble();
@@ -83,13 +84,22 @@ class RallyXGame extends Forge2DGame<FixedStepForge2DWorld>
   VehicleCommand get currentCommand =>
       playerCar?.lastCommand ?? const VehicleCommand.idle();
   int get currentFlagCount => _activeFlags.length;
-  int get currentEnemySpawnCount => _activeEnemies.length;
+  int get currentEnemySpawnCount => _activeEnemies
+      .where((enemy) => enemy.isMounted && !enemy.isRemoving)
+      .length;
   int get remainingFlagCount =>
       _activeFlags.where((flag) => !flag.isCollected).length;
   double get fuelPercent => (fuel / GameConfig.maxFuel).clamp(0, 1) * 100;
   String get runState =>
       isGameOver ? 'GAME OVER' : (_isLoadingStage ? 'LOADING' : 'RUNNING');
   List<ScoreEntry> get topScores => highScores;
+  List<EnemyCarComponent> get debugActiveEnemies => _activeEnemies
+      .where((enemy) => enemy.isMounted && !enemy.isRemoving)
+      .toList(growable: false);
+  List<Vector2> get debugSmokeCloudPositions => _activeSmokeClouds
+      .where((smoke) => smoke.isMounted && !smoke.isRemoving)
+      .map((smoke) => smoke.position.clone())
+      .toList(growable: false);
 
   TileCoordinate? get playerTile =>
       playerCar == null ? null : worldToTile(playerCar!.body.position);
@@ -212,28 +222,47 @@ class RallyXGame extends Forge2DGame<FixedStepForge2DWorld>
   }
 
   Future<void> _loadStage() async {
+    final shouldResumeEngine = !paused;
+    if (shouldResumeEngine) {
+      pauseEngine();
+    }
+
     _isLoadingStage = true;
-    _removeCurrentLevelComponents();
-    _refreshResponsiveLayoutTargets();
+    try {
+      await _waitForPhysicsUnlock();
+      _removeCurrentLevelComponents();
+      _refreshResponsiveLayoutTargets();
 
-    final level = _providerForCurrentViewport().loadLevel(
-      stage: currentStage,
-      seed: currentSeed,
-    );
-    currentLevel = level;
-    await _addLevelToWorld(level);
-    _updateCameraZoomForViewport();
-    _setCameraPositionForTarget(level.playerSpawn.toWorldCenter());
+      final level = _providerForCurrentViewport().loadLevel(
+        stage: currentStage,
+        seed: currentSeed,
+      );
+      currentLevel = level;
+      _enemyNavPlanner = EnemyNavPlanner(level: level);
+      await _waitForPhysicsUnlock();
+      await _addLevelToWorld(level);
+      _updateCameraZoomForViewport();
+      _setCameraPositionForTarget(level.playerSpawn.toWorldCenter());
 
-    playerCar = PlayerCarComponent(
-      inputSource: inputSource,
-      spawnPosition: level.playerSpawn.toWorldCenter(),
-    );
-    await _levelLayer.add(playerCar!);
-    camera.stop();
-    _updateCameraPosition();
+      playerCar = PlayerCarComponent(
+        inputSource: inputSource,
+        spawnPosition: level.playerSpawn.toWorldCenter(),
+      );
+      await _levelLayer.add(playerCar!);
+      camera.stop();
+      _updateCameraPosition();
+    } finally {
+      _isLoadingStage = false;
+      if (shouldResumeEngine) {
+        resumeEngine();
+      }
+    }
+  }
 
-    _isLoadingStage = false;
+  Future<void> _waitForPhysicsUnlock() async {
+    while (world.physicsWorld.isLocked) {
+      await Future<void>.delayed(Duration.zero);
+    }
   }
 
   void _removeCurrentLevelComponents() {
@@ -243,10 +272,12 @@ class RallyXGame extends Forge2DGame<FixedStepForge2DWorld>
     _activeFlags.clear();
     _activeEnemies.clear();
     _activeSmokeClouds.clear();
+    _enemyNavPlanner = null;
     playerCar = null;
   }
 
   Future<void> _addLevelToWorld(LevelData level) async {
+    final navPlanner = _enemyNavPlanner ?? EnemyNavPlanner(level: level);
     final components = <Component>[
       _BackdropComponent(
         playfieldTilesWide: level.width,
@@ -267,13 +298,18 @@ class RallyXGame extends Forge2DGame<FixedStepForge2DWorld>
     }
 
     final desiredEnemyCount = debugEnemyCountOverride == null
-        ? 1 + currentStage
-        : max(1, debugEnemyCountOverride!);
-    final activeEnemyCount = min(level.enemySpawns.length, desiredEnemyCount);
+        ? min(1 + currentStage, GameConfig.enemySpawnCount)
+        : max(1, min(debugEnemyCountOverride!, GameConfig.enemySpawnCount));
+    final enemySpawnTiles = _resolveEnemySpawnTiles(
+      level: level,
+      desiredEnemyCount: desiredEnemyCount,
+    );
+    final activeEnemyCount = min(enemySpawnTiles.length, desiredEnemyCount);
     for (var i = 0; i < activeEnemyCount; i++) {
       final enemy = EnemyCarComponent(
-        spawnTile: level.enemySpawns[i],
+        spawnTile: enemySpawnTiles[i],
         stage: currentStage,
+        navPlanner: navPlanner,
       );
       _activeEnemies.add(enemy);
       components.add(enemy);
@@ -286,6 +322,87 @@ class RallyXGame extends Forge2DGame<FixedStepForge2DWorld>
     }
 
     await _levelLayer.addAll(components);
+  }
+
+  List<TileCoordinate> _resolveEnemySpawnTiles({
+    required LevelData level,
+    required int desiredEnemyCount,
+  }) {
+    final selected = <TileCoordinate>[];
+    final selectedSet = <TileCoordinate>{};
+
+    void addIfValid(TileCoordinate tile) {
+      if (!level.isInside(tile.x, tile.y)) {
+        return;
+      }
+      if (!level.isWalkable(tile.x, tile.y)) {
+        return;
+      }
+      if (tile == level.playerSpawn) {
+        return;
+      }
+      if (selectedSet.add(tile)) {
+        selected.add(tile);
+      }
+    }
+
+    for (final spawn in level.enemySpawns) {
+      addIfValid(spawn);
+      if (selected.length >= desiredEnemyCount) {
+        return selected;
+      }
+    }
+
+    final candidates = <TileCoordinate>[];
+    for (var y = 0; y < level.height; y++) {
+      for (var x = 0; x < level.width; x++) {
+        final tile = TileCoordinate(x, y);
+        if (!level.isWalkable(x, y) ||
+            tile == level.playerSpawn ||
+            selectedSet.contains(tile)) {
+          continue;
+        }
+        candidates.add(tile);
+      }
+    }
+
+    while (selected.length < desiredEnemyCount) {
+      TileCoordinate? best;
+      var bestScore = -1 << 30;
+
+      for (final candidate in candidates) {
+        if (selectedSet.contains(candidate)) {
+          continue;
+        }
+        final distanceFromPlayer = candidate.manhattanDistanceTo(
+          level.playerSpawn,
+        );
+        final spreadDistance = selected.isEmpty
+            ? distanceFromPlayer
+            : _minDistanceToAny(candidate, selected);
+        final score = spreadDistance * 100 + distanceFromPlayer * 3;
+        if (score > bestScore) {
+          bestScore = score;
+          best = candidate;
+        }
+      }
+
+      if (best == null) {
+        break;
+      }
+      selectedSet.add(best);
+      selected.add(best);
+    }
+
+    return selected;
+  }
+
+  int _minDistanceToAny(TileCoordinate tile, List<TileCoordinate> others) {
+    var distance = 1 << 30;
+    for (final other in others) {
+      distance = min(distance, tile.manhattanDistanceTo(other));
+    }
+    return distance == (1 << 30) ? 0 : distance;
   }
 
   void _consumeFuel(double amount) {
@@ -359,16 +476,21 @@ class RallyXGame extends Forge2DGame<FixedStepForge2DWorld>
   }
 
   void _updateSmokeEffectsOnEnemies() {
-    _activeSmokeClouds.removeWhere(
-      (smoke) => smoke.isRemoving || !smoke.isMounted,
-    );
-    _activeEnemies.removeWhere((enemy) => enemy.isRemoving || !enemy.isMounted);
+    _activeSmokeClouds.removeWhere((smoke) => smoke.isRemoving);
+    _activeEnemies.removeWhere((enemy) => enemy.isRemoving);
 
-    for (final enemy in _activeEnemies) {
+    final activeSmokes = _activeSmokeClouds
+        .where((smoke) => smoke.isMounted && !smoke.isRemoving)
+        .toList(growable: false);
+    final activeEnemies = _activeEnemies
+        .where((enemy) => enemy.isMounted && !enemy.isRemoving)
+        .toList(growable: false);
+
+    for (final enemy in activeEnemies) {
       if (enemy.stunRemaining > 0) {
         continue;
       }
-      for (final smoke in _activeSmokeClouds) {
+      for (final smoke in activeSmokes) {
         final distance = (smoke.position - enemy.body.position).length;
         if (distance <= 0.75) {
           enemy.stun(1.25);
@@ -384,6 +506,9 @@ class RallyXGame extends Forge2DGame<FixedStepForge2DWorld>
     }
     final playerPosition = playerCar!.body.position;
     for (final enemy in _activeEnemies) {
+      if (!enemy.isMounted || enemy.isRemoving) {
+        continue;
+      }
       final distance = (enemy.body.position - playerPosition).length;
       if (distance <= 0.70) {
         _setGameOver('Hit by Robo-Taxi');
@@ -396,66 +521,6 @@ class RallyXGame extends Forge2DGame<FixedStepForge2DWorld>
     final x = position.x.floor().clamp(0, _activePlayfieldTilesWide - 1);
     final y = position.y.floor().clamp(0, _activePlayfieldTilesHigh - 1);
     return TileCoordinate(x, y);
-  }
-
-  TileCoordinate? nextTileTowardsPlayer(TileCoordinate fromTile) {
-    final level = currentLevel;
-    final player = playerCar;
-    if (level == null || player == null) {
-      return null;
-    }
-
-    final targetTile = worldToTile(player.body.position);
-    return _nextStepOnTileGraph(level, fromTile, targetTile);
-  }
-
-  TileCoordinate? _nextStepOnTileGraph(
-    LevelData level,
-    TileCoordinate from,
-    TileCoordinate target,
-  ) {
-    if (from == target) {
-      return target;
-    }
-    if (!level.isWalkable(from.x, from.y) ||
-        !level.isWalkable(target.x, target.y)) {
-      return null;
-    }
-
-    final queue = Queue<TileCoordinate>()..add(from);
-    final visited = <TileCoordinate>{from};
-    final previous = <TileCoordinate, TileCoordinate>{};
-
-    const offsets = <(int, int)>[(0, -1), (1, 0), (0, 1), (-1, 0)];
-
-    while (queue.isNotEmpty) {
-      final current = queue.removeFirst();
-      if (current == target) {
-        break;
-      }
-
-      for (final (dx, dy) in offsets) {
-        final neighbor = TileCoordinate(current.x + dx, current.y + dy);
-        if (!level.isInside(neighbor.x, neighbor.y) ||
-            !level.isWalkable(neighbor.x, neighbor.y)) {
-          continue;
-        }
-        if (visited.add(neighbor)) {
-          previous[neighbor] = current;
-          queue.add(neighbor);
-        }
-      }
-    }
-
-    if (!visited.contains(target)) {
-      return null;
-    }
-
-    var step = target;
-    while (previous.containsKey(step) && previous[step] != from) {
-      step = previous[step]!;
-    }
-    return step;
   }
 
   void _updateCameraZoomForViewport() {
@@ -545,6 +610,10 @@ class RallyXGame extends Forge2DGame<FixedStepForge2DWorld>
 
   void debugForceGameOver() {
     _setGameOver('Debug forced');
+  }
+
+  void debugDeploySmoke() {
+    _deploySmoke();
   }
 
   Future<void> debugCollectAllFlags() async {
