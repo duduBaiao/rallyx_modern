@@ -53,7 +53,7 @@ class _HudOverlayState extends State<HudOverlay> {
             final minimapAspect = level == null
                 ? 1.0
                 : level.width / level.height;
-            const headerHeight = 36.0;
+            const headerHeight = 68.0;
             const gapBeforeMinimap = 12.0;
             final minimapMaxHeight = math.max(
               0.0,
@@ -105,6 +105,37 @@ class _HudOverlayState extends State<HudOverlay> {
                         ),
                       ),
                     ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      const Text(
+                        'Survival',
+                        style: TextStyle(
+                          color: Color(0xFFB8C2D1),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Align(
+                          alignment: Alignment.centerRight,
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerRight,
+                            child: Text(
+                              '${widget.game.survivalTime.toStringAsFixed(1)}s',
+                              style: const TextStyle(
+                                color: Color(0xFFE6EDF7),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: gapBeforeMinimap),
                   Align(

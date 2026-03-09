@@ -1,6 +1,6 @@
 # Rally-X Inspired Game - MVP Plan
 
-Last updated: 2026-03-07
+Last updated: 2026-03-09
 
 ## 1. Product Goal
 
@@ -18,7 +18,7 @@ Build a modern implementation of Rally-X using Flutter + Flame + Forge2D for des
 - Art: retro pixel placeholders for MVP.
 - Input: keyboard only in MVP.
 - Physics: semi-arcade, simple handling (no gears).
-- Level: one fixed-size level format, procedurally generated each run.
+- Level: one procedural level format, generated each run, with baseline size and responsive upscaling on larger viewports.
 - Objective: stay alive; flags grant time-score bonuses.
 - Lose conditions:
   - fuel empty,
@@ -31,10 +31,10 @@ Build a modern implementation of Rally-X using Flutter + Flame + Forge2D for des
 
 ## 3. Rally-X Parity Decisions for MVP
 
-- Map scale follows original Rally-X proportions:
-  - world grid: 32x32 tiles,
-  - visible playfield area roughly 28x28 tiles,
-  - side HUD/radar strip roughly 8x28 tiles.
+- Map scale uses Rally-X-inspired proportions at a larger modern baseline:
+  - baseline playfield grid: 175x97 tiles,
+  - baseline world width budgeting includes an 8-tile HUD strip concept,
+  - visible camera target is roughly 24x24 tiles and scales with viewport size.
 - Keep fuel as timer/resource.
 - Keep smoke mechanic.
 - Keep static map hazards only (no moving obstacles).
@@ -66,9 +66,9 @@ Build a modern implementation of Rally-X using Flutter + Flame + Forge2D for des
 
 - `input/`: abstract command interface + keyboard implementation.
 - `entities/`: cars, flags, walls, rocks, smoke.
-- `controllers/`: player movement and enemy chase behavior.
+- movement/chase controller logic: implemented within entity components for MVP (`PlayerCarComponent`, `EnemyCarComponent`).
 - `level/`: procedural map generation + future level-provider abstraction.
-- `systems/`: fuel, scoring, stage progression, enemy spawning/director.
+- runtime systems: fuel, scoring, stage progression, and enemy spawning are orchestrated in `RallyXGame` for MVP.
 - `ui/`: HUD, minimap, overlays.
 - `persistence/`: high score repository.
 
@@ -107,7 +107,7 @@ Introduce now for future extensibility:
 
 ### 7.2 Procedural Rules
 
-- Generate connected tile-aligned corridor maze in 32x32 grid.
+- Generate connected tile-aligned corridor maze in the active procedural grid dimensions (baseline 175x97, with responsive upscaling).
 - Generate a new run seed each restart; keep that seed across stage progression.
 - Build static colliders for walls and rocks.
 - Place player spawn, enemy spawns, and 10 flags.

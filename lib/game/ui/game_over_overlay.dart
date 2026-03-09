@@ -79,12 +79,12 @@ class _GameOverOverlayState extends State<GameOverOverlay> {
               const Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
-                  'Top 10 (Survival Time)',
+                  'Top 10 (Total Score)',
                   style: TextStyle(color: Colors.white70),
                 ),
               ),
               const SizedBox(height: 6),
-              ...widget.game.topScores.take(5).toList().asMap().entries.map((
+              ...widget.game.topScores.take(10).toList().asMap().entries.map((
                 entry,
               ) {
                 final rank = entry.key + 1;
@@ -92,7 +92,7 @@ class _GameOverOverlayState extends State<GameOverOverlay> {
                 return Align(
                   alignment: Alignment.centerLeft,
                   child: Text(
-                    '$rank. ${score.survivalSeconds.toStringAsFixed(1)}s (Stage ${score.stageReached})',
+                    '$rank. ${score.totalScore.toStringAsFixed(1)} pts (Surv ${score.survivalSeconds.toStringAsFixed(1)}s, Stage ${score.stageReached})',
                     style: const TextStyle(color: Colors.white),
                   ),
                 );

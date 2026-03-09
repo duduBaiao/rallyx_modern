@@ -563,6 +563,7 @@ class RallyXGame extends Forge2DGame<FixedStepForge2DWorld>
   Future<void> _saveCurrentScore() async {
     final entry = ScoreEntry(
       survivalSeconds: survivalTime,
+      bonusScore: bonusScore,
       stageReached: currentStage,
       createdAtIso: DateTime.now().toUtc().toIso8601String(),
     );

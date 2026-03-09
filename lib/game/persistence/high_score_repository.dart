@@ -25,7 +25,7 @@ class SharedPrefsHighScoreRepository implements HighScoreRepository {
       }
     }
 
-    parsed.sort((a, b) => b.survivalSeconds.compareTo(a.survivalSeconds));
+    parsed.sort((a, b) => b.totalScore.compareTo(a.totalScore));
     return parsed.take(10).toList(growable: false);
   }
 
@@ -34,7 +34,7 @@ class SharedPrefsHighScoreRepository implements HighScoreRepository {
     final prefs = await SharedPreferences.getInstance();
     final current = await loadTop10();
     final updated = [...current, entry]
-      ..sort((a, b) => b.survivalSeconds.compareTo(a.survivalSeconds));
+      ..sort((a, b) => b.totalScore.compareTo(a.totalScore));
     final trimmed = updated.take(10).toList(growable: false);
 
     final serialized = trimmed
