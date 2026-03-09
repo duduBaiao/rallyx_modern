@@ -42,12 +42,20 @@ class PlayerCarComponent extends BodyComponent<RallyXGame> {
   static const double _maxForwardSpeed = 4.2;
   static const double _maxReverseSpeed = 1.8;
   static const double _minSteerSpeed = 0.55;
+  static const double _lowSpeedSteerFactor = 0.55;
   static const double _maxSteerRate = 5.12;
   static const double _steerResponse = 20.0;
   static const double _lateralGrip = 0.85;
+  static const double _wallSlideAssistForce = 32;
+  static const double _wallSlideAssistForwardSpeedThreshold = 0.45;
+  static const double _wallSlideAssistSteeringThreshold = 0.30;
+  static const double _wallSlideAssistDelaySeconds = 0.12;
+  static const double _stuckTurnAssistMinAngularVelocity = 1.4;
+  static const double _stuckTurnAssistTorqueBoost = 28;
 
   final InputSource inputSource;
   bool controlsEnabled = true;
+  double _lowForwardThrottleTime = 0;
 
   VehicleCommand _lastCommand = const VehicleCommand.idle();
 
@@ -59,6 +67,40 @@ class PlayerCarComponent extends BodyComponent<RallyXGame> {
     required double signedForwardSpeed,
   }) {
     return signedForwardSpeed >= 0 ? steeringInput : -steeringInput;
+  }
+
+  static double steeringForDriverIntent({
+    required VehicleCommand command,
+    required double signedForwardSpeed,
+  }) {
+    if (command.throttle > command.brake + 0.05) {
+      return command.steering;
+    }
+    if (command.brake > command.throttle + 0.05) {
+      return -command.steering;
+    }
+    return steeringForTravelDirection(
+      steeringInput: command.steering,
+      signedForwardSpeed: signedForwardSpeed,
+    );
+  }
+
+  static bool shouldApplyWallSlideAssist({
+    required double throttle,
+    required double steering,
+    required double forwardSpeed,
+    required double lowForwardThrottleTime,
+  }) {
+    if (throttle <= 0) {
+      return false;
+    }
+    if (steering.abs() < _wallSlideAssistSteeringThreshold) {
+      return false;
+    }
+    if (forwardSpeed > _wallSlideAssistForwardSpeedThreshold) {
+      return false;
+    }
+    return lowForwardThrottleTime >= _wallSlideAssistDelaySeconds;
   }
 
   final Paint _bodyPaint = Paint()..color = const Color(0xFF2B8CFF);
@@ -79,7 +121,7 @@ class PlayerCarComponent extends BodyComponent<RallyXGame> {
     _lastCommand = command;
 
     _applyLateralFriction();
-    _applyDrive(command);
+    _applyDrive(command, dt);
     _applySteering(command);
   }
 
@@ -106,7 +148,7 @@ class PlayerCarComponent extends BodyComponent<RallyXGame> {
     canvas.drawRRect(windshieldRect, _windshieldPaint);
   }
 
-  void _applyDrive(VehicleCommand command) {
+  void _applyDrive(VehicleCommand command, double dt) {
     final forward = _forwardVector();
     final right = _rightVector(forward);
     final velocity = body.linearVelocity;
@@ -132,6 +174,28 @@ class PlayerCarComponent extends BodyComponent<RallyXGame> {
       body.applyForce(forward * (-forwardSpeed * _coastDrag));
     }
 
+    if (command.throttle > 0 &&
+        forwardSpeed < _wallSlideAssistForwardSpeedThreshold) {
+      _lowForwardThrottleTime += dt;
+    } else {
+      _lowForwardThrottleTime = 0;
+    }
+
+    if (shouldApplyWallSlideAssist(
+      throttle: command.throttle,
+      steering: command.steering,
+      forwardSpeed: forwardSpeed,
+      lowForwardThrottleTime: _lowForwardThrottleTime,
+    )) {
+      final sideDirection = steeringForDriverIntent(
+        command: command,
+        signedForwardSpeed: forwardSpeed,
+      ).sign;
+      final sideForceMagnitude =
+          _wallSlideAssistForce * command.throttle * command.steering.abs();
+      body.applyForce(right * (sideDirection * sideForceMagnitude));
+    }
+
     _clampVelocity(forward, right);
   }
 
@@ -139,21 +203,49 @@ class PlayerCarComponent extends BodyComponent<RallyXGame> {
     final forward = _forwardVector();
     final signedForwardSpeed = body.linearVelocity.dot(forward);
     final speed = signedForwardSpeed.abs();
+    final stuckAssistActive = shouldApplyWallSlideAssist(
+      throttle: command.throttle,
+      steering: command.steering,
+      forwardSpeed: speed,
+      lowForwardThrottleTime: _lowForwardThrottleTime,
+    );
+    final hasDriveInput = command.throttle > 0 || command.brake > 0;
     if (speed < _minSteerSpeed) {
-      body.angularVelocity = 0;
-      return;
+      if (!hasDriveInput || command.steering.abs() < 0.05) {
+        body.angularVelocity *= 0.7;
+        return;
+      }
     }
 
-    final speedRatio = (speed / _maxForwardSpeed).clamp(0.45, 1.0);
-    final steeringDirection = steeringForTravelDirection(
-      steeringInput: command.steering,
+    var speedRatio = speed < _minSteerSpeed
+        ? ((speed / _minSteerSpeed) * 0.65 + 0.35).clamp(0.35, 1.0)
+        : (speed / _maxForwardSpeed).clamp(0.45, 1.0);
+    var steeringGain = speed < _minSteerSpeed ? _lowSpeedSteerFactor : 1.0;
+    if (stuckAssistActive) {
+      speedRatio = math.max(speedRatio, 0.85);
+      steeringGain = math.max(steeringGain, 1.15);
+    }
+    final steeringDirection = steeringForDriverIntent(
+      command: command,
       signedForwardSpeed: signedForwardSpeed,
     );
     final targetAngularVelocity =
-        steeringDirection * _maxSteerRate * speedRatio;
+        steeringDirection * _maxSteerRate * speedRatio * steeringGain;
     final angularVelocityDelta = targetAngularVelocity - body.angularVelocity;
     final torque = angularVelocityDelta * body.getInertia() * _steerResponse;
     body.applyTorque(torque);
+
+    if (stuckAssistActive) {
+      final desiredSpin =
+          steeringDirection * _stuckTurnAssistMinAngularVelocity;
+      if (body.angularVelocity.abs() <
+          _stuckTurnAssistMinAngularVelocity * 0.65) {
+        body.angularVelocity = body.angularVelocity * 0.8 + desiredSpin * 0.2;
+      }
+      body.applyTorque(
+        steeringDirection * body.getInertia() * _stuckTurnAssistTorqueBoost,
+      );
+    }
   }
 
   void _applyLateralFriction() {
