@@ -194,7 +194,7 @@ class _MinimapPainter extends CustomPainter {
   final Paint _playerPaint = Paint()..color = const Color(0xFF3CA0FF);
   final Paint _enemyPaint = Paint()..color = const Color(0xFFE76565);
   final Paint _flagPaint = Paint()..color = const Color(0xFFF2E85A);
-  final Paint _specialFlagPaint = Paint()..color = const Color(0xFFFC6A6A);
+  final Paint _specialFlagPaint = Paint()..color = const Color(0xFF46C67A);
 
   @override
   void paint(Canvas canvas, Size size) {

@@ -18,7 +18,7 @@ class FlagComponent extends BodyComponent<RallyXGame> {
   final Paint _polePaint = Paint()..color = const Color(0xFFE8E8E8);
   late final Paint _flagPaint = Paint()
     ..color = spawn.isSpecial
-        ? const Color(0xFFFC6A6A)
+        ? const Color(0xFF46C67A)
         : const Color(0xFFF2E85A);
 
   bool get isCollected => _collected;
