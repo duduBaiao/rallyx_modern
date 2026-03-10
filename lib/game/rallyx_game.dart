@@ -500,17 +500,31 @@ class RallyXGame extends Forge2DGame<FixedStepForge2DWorld>
     }
   }
 
-  void _checkEnemyCollision() {
-    if (playerCar == null) {
+  void handlePlayerContact(Object other) {
+    if (isGameOver) {
       return;
     }
-    final playerPosition = playerCar!.body.position;
-    for (final enemy in _activeEnemies) {
-      if (!enemy.isMounted || enemy.isRemoving) {
+    if (other is EnemyCarComponent && other.isMounted && !other.isRemoving) {
+      _setGameOver('Hit by Robo-Taxi');
+    }
+  }
+
+  void _checkEnemyCollision() {
+    final player = playerCar;
+    if (player == null || isGameOver) {
+      return;
+    }
+
+    for (final contact in player.body.contacts) {
+      if (!contact.isTouching()) {
         continue;
       }
-      final distance = (enemy.body.position - playerPosition).length;
-      if (distance <= 0.70) {
+      final otherUserData = identical(contact.bodyA, player.body)
+          ? contact.bodyB.userData
+          : contact.bodyA.userData;
+      if (otherUserData is EnemyCarComponent &&
+          otherUserData.isMounted &&
+          !otherUserData.isRemoving) {
         _setGameOver('Hit by Robo-Taxi');
         return;
       }
@@ -636,7 +650,18 @@ class RallyXGame extends Forge2DGame<FixedStepForge2DWorld>
       stageReached: currentStage,
       createdAtIso: DateTime.now().toUtc().toIso8601String(),
     );
+    // Show the just-finished run immediately in the game-over UI.
+    highScores = _withScoreInserted(highScores, entry);
     highScores = await highScoreRepository.saveScore(entry);
+  }
+
+  List<ScoreEntry> _withScoreInserted(
+    List<ScoreEntry> existing,
+    ScoreEntry entry,
+  ) {
+    final updated = [...existing, entry]
+      ..sort((a, b) => b.totalScore.compareTo(a.totalScore));
+    return updated.take(10).toList(growable: false);
   }
 
   int get _activePlayfieldTilesWide =>

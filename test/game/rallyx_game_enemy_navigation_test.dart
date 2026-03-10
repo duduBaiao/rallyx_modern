@@ -99,6 +99,10 @@ void main() {
       await tester.pump(const Duration(milliseconds: 30));
     }
     expect(cloudVisible, isTrue);
+    final player = game.playerCar!;
+    player.body.setTransform(player.body.position + Vector2(4, 0), player.body.angle);
+    player.body.linearVelocity = Vector2.zero();
+    player.body.angularVelocity = 0;
 
     var stunned = false;
     for (var i = 0; i < 6; i++) {
@@ -148,6 +152,45 @@ void main() {
     enemy.body.angularVelocity = 0;
     await tester.pump(const Duration(milliseconds: 20));
 
+    expect(game.isGameOver, isTrue);
+    expect(game.gameOverReason, 'Hit by Robo-Taxi');
+    expect(game.topScores, isNotEmpty);
+  });
+
+  testWidgets('side body contact triggers game over', (
+    WidgetTester tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final inputSource = KeyboardInputSource();
+    final game = RallyXGame(
+      inputSource: inputSource,
+      levelProvider: _StaticLevelProvider(baseLevel: _buildOpenLevel()),
+      debugEnemyCountOverride: 1,
+      initialSeed: 13,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: GameWidget<RallyXGame>(game: game)),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 900));
+
+    final player = game.playerCar;
+    expect(player, isNotNull);
+    final enemy = game.debugActiveEnemies.first;
+
+    enemy.stun(1.5);
+    player!.body.setTransform(player.body.position, 0);
+    final sideTouchPosition = player.body.position + Vector2(0, 0.75);
+    enemy.body.setTransform(sideTouchPosition, 0);
+    enemy.body.linearVelocity = Vector2.zero();
+    enemy.body.angularVelocity = 0;
+
+    // Body centers are farther than old 0.70 threshold but still overlapping.
+    expect((enemy.body.position - player.body.position).length, greaterThan(0.70));
+
+    await tester.pump(const Duration(milliseconds: 20));
     expect(game.isGameOver, isTrue);
     expect(game.gameOverReason, 'Hit by Robo-Taxi');
   });

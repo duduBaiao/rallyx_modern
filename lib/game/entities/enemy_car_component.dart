@@ -62,6 +62,12 @@ class EnemyCarComponent extends BodyComponent<RallyXGame> {
   final Paint _roofPaint = Paint()..color = const Color(0xFFA73B3B);
 
   @override
+  Future<void> onLoad() async {
+    await super.onLoad();
+    body.userData = this;
+  }
+
+  @override
   void update(double dt) {
     super.update(dt);
 

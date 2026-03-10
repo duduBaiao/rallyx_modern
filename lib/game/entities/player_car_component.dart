@@ -7,7 +7,8 @@ import 'package:rallyx_modern/game/input/input_source.dart';
 import 'package:rallyx_modern/game/input/vehicle_command.dart';
 import 'package:rallyx_modern/game/rallyx_game.dart';
 
-class PlayerCarComponent extends BodyComponent<RallyXGame> {
+class PlayerCarComponent extends BodyComponent<RallyXGame>
+    with ContactCallbacks {
   PlayerCarComponent({
     required this.inputSource,
     required Vector2 spawnPosition,
@@ -135,6 +136,12 @@ class PlayerCarComponent extends BodyComponent<RallyXGame> {
   final Paint _windshieldPaint = Paint()..color = const Color(0xFF99D8FF);
 
   @override
+  Future<void> onLoad() async {
+    await super.onLoad();
+    body.userData = this;
+  }
+
+  @override
   void update(double dt) {
     super.update(dt);
 
@@ -152,6 +159,12 @@ class PlayerCarComponent extends BodyComponent<RallyXGame> {
       dt: dt,
       runtimeState: _dynamicsState,
     );
+  }
+
+  @override
+  void beginContact(Object other, Contact contact) {
+    super.beginContact(other, contact);
+    game.handlePlayerContact(other);
   }
 
   @override
