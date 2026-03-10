@@ -39,6 +39,10 @@ class EnemyCarComponent extends BodyComponent<RallyXGame> {
   static const double _carWidth = 0.72;
   static const double _halfLength = _carLength / 2;
   static const double _halfWidth = _carWidth / 2;
+  static const double _playerMaxForwardSpeed = 4.2;
+  static const double _enemySpeedRatioToPlayer = 0.95;
+  static const double _enemyMaxForwardSpeed =
+      _playerMaxForwardSpeed * _enemySpeedRatioToPlayer;
 
   final TileCoordinate spawnTile;
   final int stage;
@@ -173,7 +177,7 @@ class EnemyCarComponent extends BodyComponent<RallyXGame> {
       reverseForce: 42,
       coastDrag: 10,
       reverseThreshold: 0.35,
-      maxForwardSpeed: 3.7 + stage * 0.42,
+      maxForwardSpeed: _enemyMaxForwardSpeed,
       maxReverseSpeed: 1.75,
       minSteerSpeed: 0.45,
       lowSpeedSteerFactor: 0.72,
@@ -191,8 +195,9 @@ class EnemyCarComponent extends BodyComponent<RallyXGame> {
   }
 
   static EnemyCommandBrainConfig _brainConfigForStage(int stage) {
+    final desiredCruiseSpeed = 3.9 + stage * 0.45;
     return EnemyCommandBrainConfig(
-      maxCruiseSpeed: 3.9 + stage * 0.45,
+      maxCruiseSpeed: math.min(desiredCruiseSpeed, _enemyMaxForwardSpeed),
       minTurnSpeed: 1.05 + stage * 0.06,
       lookaheadDistance: 2.0,
       minLookaheadDistance: 0.95,
