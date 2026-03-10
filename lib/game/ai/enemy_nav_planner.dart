@@ -27,13 +27,17 @@ class EnemyRoute {
 class EnemyNavPlanner {
   EnemyNavPlanner({
     required this.level,
-    this.wallPenaltyWeight = 0.196, // 30% less centerline bias
+    this.wallPenaltyWeight = 0.0,
     this.clearanceCap = 4,
+    this.minClearanceFromWalls = 2,
+    this.fallbackMinClearanceFromWalls = 1,
   }) : _clearanceMap = _buildClearanceMap(level);
 
   final LevelData level;
   final double wallPenaltyWeight;
   final int clearanceCap;
+  final int minClearanceFromWalls;
+  final int fallbackMinClearanceFromWalls;
   final List<List<int>> _clearanceMap; // [y][x]
 
   EnemyRoute? planRoute({
@@ -50,6 +54,30 @@ class EnemyNavPlanner {
       return EnemyRoute(pathTiles: [from], waypointTiles: [from]);
     }
 
+    final strictPath = _findPath(
+      from: from,
+      to: to,
+      minClearance: minClearanceFromWalls,
+    );
+    final path =
+        strictPath ??
+        _findPath(
+          from: from,
+          to: to,
+          minClearance: fallbackMinClearanceFromWalls,
+        );
+    if (path == null) {
+      return null;
+    }
+    final waypoints = _compressToWaypoints(path);
+    return EnemyRoute(pathTiles: path, waypointTiles: waypoints);
+  }
+
+  List<TileCoordinate>? _findPath({
+    required TileCoordinate from,
+    required TileCoordinate to,
+    required int minClearance,
+  }) {
     final gScore = <TileCoordinate, double>{from: 0};
     final previous = <TileCoordinate, TileCoordinate>{};
     final closed = <TileCoordinate>{};
@@ -79,12 +107,18 @@ class EnemyNavPlanner {
       }
 
       for (final neighbor in _neighbors(current)) {
-        if (!level.isWalkable(neighbor.x, neighbor.y) ||
-            closed.contains(neighbor)) {
+        if (closed.contains(neighbor) ||
+            !_isTraversable(
+              tile: neighbor,
+              from: from,
+              to: to,
+              minClearance: minClearance,
+            )) {
           continue;
         }
 
-        final tentativeScore = currentScore + _movementCost(neighbor);
+        final tentativeScore =
+            currentScore + _movementCost(neighbor, minClearance: minClearance);
         final knownBest = gScore[neighbor];
         if (knownBest != null && tentativeScore >= knownBest) {
           continue;
@@ -106,21 +140,39 @@ class EnemyNavPlanner {
     if (!previous.containsKey(to)) {
       return null;
     }
-
-    final path = _reconstructPath(previous: previous, start: from, target: to);
-    final waypoints = _compressToWaypoints(path);
-    return EnemyRoute(pathTiles: path, waypointTiles: waypoints);
+    return _reconstructPath(previous: previous, start: from, target: to);
   }
 
   double _heuristic(TileCoordinate from, TileCoordinate to) {
     return (from.x - to.x).abs().toDouble() + (from.y - to.y).abs().toDouble();
   }
 
-  double _movementCost(TileCoordinate tile) {
+  double _movementCost(TileCoordinate tile, {required int minClearance}) {
+    if (wallPenaltyWeight <= 0) {
+      return 1.0;
+    }
     final clearance = _clearanceMap[tile.y][tile.x];
     final clamped = math.min(clearance, clearanceCap).toDouble();
-    final penalty = (clearanceCap - clamped) * wallPenaltyWeight;
-    return 1.0 + penalty;
+    final floorClearance = math.min(minClearance, clearanceCap).toDouble();
+    final penaltyBase = math.max(0.0, clearanceCap - clamped);
+    final floorPenaltyBase = math.max(0.0, clearanceCap - floorClearance);
+    final extraPenalty = math.max(0.0, penaltyBase - floorPenaltyBase);
+    return 1.0 + extraPenalty * wallPenaltyWeight;
+  }
+
+  bool _isTraversable({
+    required TileCoordinate tile,
+    required TileCoordinate from,
+    required TileCoordinate to,
+    required int minClearance,
+  }) {
+    if (!level.isWalkable(tile.x, tile.y)) {
+      return false;
+    }
+    if (tile == from || tile == to) {
+      return true;
+    }
+    return _clearanceMap[tile.y][tile.x] >= minClearance;
   }
 
   double _axisImbalance(TileCoordinate tile, TileCoordinate target) {

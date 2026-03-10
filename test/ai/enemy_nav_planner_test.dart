@@ -56,32 +56,52 @@ void main() {
       expect(route!.pathTiles.contains(const TileCoordinate(4, 3)), isFalse);
     });
 
-    test('prefers corridor center in wide straight sections', () {
+    test('uses shortest route while keeping one-tile wall clearance', () {
       final level = _levelFromAscii([
-        '#########',
-        '#.......#',
-        '#.......#',
-        '#.......#',
-        '#.......#',
-        '#.......#',
-        '#########',
+        '###########',
+        '#.........#',
+        '#.........#',
+        '#.........#',
+        '#.........#',
+        '###########',
       ]);
       final planner = EnemyNavPlanner(level: level);
 
       final route = planner.planRoute(
-        from: const TileCoordinate(1, 3),
-        to: const TileCoordinate(7, 3),
+        from: const TileCoordinate(2, 2),
+        to: const TileCoordinate(8, 2),
       );
 
       expect(route, isNotNull);
-      final interior = route!.pathTiles
+      final path = route!.pathTiles;
+      final interior = path
           .where(
             (tile) =>
-                tile != route.pathTiles.first && tile != route.pathTiles.last,
+                tile != path.first && tile != path.last,
           )
           .toList(growable: false);
       expect(interior, isNotEmpty);
-      expect(interior.every((tile) => tile.y == 3), isTrue);
+      for (final tile in interior) {
+        expect(_isAdjacentToObstacle(level, tile), isFalse);
+      }
+      expect(path.length, 7);
+    });
+
+    test('falls back when strict one-tile clearance is impossible', () {
+      final level = _levelFromAscii([
+        '#######',
+        '#.....#',
+        '#######',
+      ]);
+      final planner = EnemyNavPlanner(level: level);
+
+      final route = planner.planRoute(
+        from: const TileCoordinate(1, 1),
+        to: const TileCoordinate(5, 1),
+      );
+
+      expect(route, isNotNull);
+      expect(route!.pathTiles.length, 5);
     });
 
     test('produces deterministic paths for same inputs', () {
@@ -111,6 +131,18 @@ void main() {
       expect(routeA.waypointTiles, routeB.waypointTiles);
     });
   });
+}
+
+bool _isAdjacentToObstacle(LevelData level, TileCoordinate tile) {
+  const offsets = <(int, int)>[(0, -1), (1, 0), (0, 1), (-1, 0)];
+  for (final (dx, dy) in offsets) {
+    final x = tile.x + dx;
+    final y = tile.y + dy;
+    if (!level.isInside(x, y) || !level.isWalkable(x, y)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 LevelData _levelFromAscii(List<String> lines) {
