@@ -231,11 +231,17 @@ class VehicleDynamicsController {
       }
     }
 
+    final lowSpeedRatio = speed < tuning.minSteerSpeed
+        ? (speed / tuning.minSteerSpeed).clamp(0.0, 1.0)
+        : 1.0;
     var speedRatio = speed < tuning.minSteerSpeed
-        ? ((speed / tuning.minSteerSpeed) * 0.65 + 0.35).clamp(0.35, 1.0)
+        ? (0.18 + lowSpeedRatio * 0.47).clamp(0.18, 0.65)
         : (speed / tuning.maxForwardSpeed).clamp(0.45, 1.0);
     var steeringGain = speed < tuning.minSteerSpeed
-        ? tuning.lowSpeedSteerFactor
+        ? (tuning.lowSpeedSteerFactor * (0.45 + lowSpeedRatio * 0.55)).clamp(
+            0.22,
+            tuning.lowSpeedSteerFactor,
+          )
         : 1.0;
     if (stuckAssistActive) {
       speedRatio = math.max(speedRatio, 0.85);

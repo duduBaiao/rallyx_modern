@@ -15,12 +15,12 @@ void main() {
       expect(command.smoke, isFalse);
     });
 
-    test('maps -480/0/480 steering and 0/50/100 pedals correctly', () {
+    test('maps 70-degree full lock with arcade steering response', () {
       final source = GameControlsInputSource();
 
       source.update(
         const GameControlsInput(
-          steeringWheelDeg: -480,
+          steeringWheelDeg: -70,
           throttlePercent: 0,
           brakePercent: 100,
           emergencyPressed: false,
@@ -47,7 +47,20 @@ void main() {
 
       source.update(
         const GameControlsInput(
-          steeringWheelDeg: 480,
+          steeringWheelDeg: 35,
+          throttlePercent: 100,
+          brakePercent: 0,
+          emergencyPressed: false,
+        ),
+      );
+      final halfLock = source.poll(1 / 60);
+      expect(halfLock.steering, 0.5);
+      expect(halfLock.throttle, 1.0);
+      expect(halfLock.brake, 0.0);
+
+      source.update(
+        const GameControlsInput(
+          steeringWheelDeg: 70,
           throttlePercent: 100,
           brakePercent: 0,
           emergencyPressed: false,

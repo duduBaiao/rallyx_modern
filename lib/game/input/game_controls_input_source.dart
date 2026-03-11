@@ -6,7 +6,7 @@ import 'package:rallyx_modern/game/input/vehicle_command.dart';
 class GameControlsInputSource implements InputSource {
   GameControlsInput _latestInput = const GameControlsInput.neutral();
 
-  static const double maxSteeringWheelDeg = 480;
+  static const double maxSteeringWheelDeg = 70;
   static const double maxRoadWheelDeg = 35;
   static const double steeringRatio = maxSteeringWheelDeg / maxRoadWheelDeg;
 

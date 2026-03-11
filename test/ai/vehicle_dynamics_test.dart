@@ -109,6 +109,58 @@ void main() {
       expect(body.angularVelocity.abs(), lessThan(0.001));
       expect(body.angle.abs(), lessThan(0.001));
     });
+
+    test(
+      'near-zero steering stays restrained unless stuck assist is active',
+      () {
+        final controller = const VehicleDynamicsController(tuning: tuning);
+
+        final normalWorld = World(Vector2.zero());
+        final normalBody = _spawnCarBody(normalWorld);
+        normalBody.linearVelocity = Vector2(0.05, 0);
+        final normalRuntimeState = VehicleDynamicsRuntimeState();
+
+        controller.apply(
+          body: normalBody,
+          command: const VehicleCommand(
+            throttle: 1,
+            brake: 0,
+            steering: 1,
+            smoke: false,
+          ),
+          dt: 1 / 60,
+          runtimeState: normalRuntimeState,
+        );
+        normalWorld.stepDt(1 / 60);
+        final restrainedAngularVelocity = normalBody.angularVelocity.abs();
+
+        final stuckWorld = World(Vector2.zero());
+        final stuckBody = _spawnCarBody(stuckWorld);
+        stuckBody.linearVelocity = Vector2(0.05, 0);
+        final stuckRuntimeState = VehicleDynamicsRuntimeState()
+          ..lowForwardThrottleTime = tuning.wallSlideAssistDelaySeconds;
+
+        controller.apply(
+          body: stuckBody,
+          command: const VehicleCommand(
+            throttle: 1,
+            brake: 0,
+            steering: 1,
+            smoke: false,
+          ),
+          dt: 1 / 60,
+          runtimeState: stuckRuntimeState,
+        );
+        stuckWorld.stepDt(1 / 60);
+        final stuckAssistAngularVelocity = stuckBody.angularVelocity.abs();
+
+        expect(restrainedAngularVelocity, lessThan(0.35));
+        expect(
+          stuckAssistAngularVelocity,
+          greaterThan(restrainedAngularVelocity * 2),
+        );
+      },
+    );
   });
 }
 
