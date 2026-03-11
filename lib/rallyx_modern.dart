@@ -1,5 +1,7 @@
 library;
 
+export 'game/input/game_controls_input.dart';
+export 'game/input/game_controls_input_source.dart';
 export 'game/input/input_source.dart';
 export 'game/input/keyboard_input_source.dart';
 export 'game/input/vehicle_command.dart';

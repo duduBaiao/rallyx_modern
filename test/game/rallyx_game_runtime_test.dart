@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rallyx_modern/game/config/game_config.dart';
+import 'package:rallyx_modern/game/input/game_controls_input.dart';
+import 'package:rallyx_modern/game/input/game_controls_input_source.dart';
 import 'package:rallyx_modern/game/input/keyboard_input_source.dart';
 import 'package:rallyx_modern/game/level/level_data.dart';
 import 'package:rallyx_modern/game/level/level_provider.dart';
@@ -283,6 +285,75 @@ void main() {
     expect(game.playerCar!.speed, lessThanOrEqualTo(4.3));
 
     inputSource.clear();
+  });
+
+  testWidgets('emergency input is edge-triggered for smoke deployment', (
+    WidgetTester tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final inputSource = GameControlsInputSource();
+    final game = RallyXGame(inputSource: inputSource);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: GameWidget<RallyXGame>(game: game)),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 700));
+
+    expect(game.playerCar, isNotNull);
+    expect(game.debugSmokeCloudPositions, isEmpty);
+
+    inputSource.update(
+      const GameControlsInput(
+        steeringWheelDeg: 0,
+        throttlePercent: 0,
+        brakePercent: 0,
+        emergencyPressed: true,
+      ),
+    );
+    var cloudVisible = false;
+    for (var i = 0; i < 8; i++) {
+      if (game.debugSmokeCloudPositions.isNotEmpty) {
+        cloudVisible = true;
+        break;
+      }
+      await tester.pump(const Duration(milliseconds: 30));
+    }
+    expect(cloudVisible, isTrue);
+    expect(game.debugSmokeCloudPositions.length, 1);
+
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(game.debugSmokeCloudPositions.length, 1);
+
+    inputSource.update(
+      const GameControlsInput(
+        steeringWheelDeg: 0,
+        throttlePercent: 0,
+        brakePercent: 0,
+        emergencyPressed: false,
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 120));
+
+    inputSource.update(
+      const GameControlsInput(
+        steeringWheelDeg: 0,
+        throttlePercent: 0,
+        brakePercent: 0,
+        emergencyPressed: true,
+      ),
+    );
+    var secondCloudVisible = false;
+    for (var i = 0; i < 12; i++) {
+      if (game.debugSmokeCloudPositions.length >= 2) {
+        secondCloudVisible = true;
+        break;
+      }
+      await tester.pump(const Duration(milliseconds: 30));
+    }
+    expect(secondCloudVisible, isTrue);
+    expect(game.debugSmokeCloudPositions.length, 2);
   });
 }
 
